@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secretos
+.env
+
+# Logs generados (se conserva logs/.gitkeep)
+logs/*.jsonl
+
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
