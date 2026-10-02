@@ -43,6 +43,10 @@ Si falta la llave de algún proveedor que está en `PRIMARY` o `FALLBACKS`, el p
 # Pregunta al LLM (usa PRIMARY y, si falla, FALLBACKS)
 uv run main.py "Resume este ticket: el portal de proveedores no carga desde las 9:00"
 
+# Demo de la clase: solo Gemini, sin fallbacks, con el ticket T-1043.
+# Funciona aunque GroqProvider siga con su TODO.
+uv run main.py --demo
+
 # Fuerza un proveedor (sin fallbacks)
 uv run main.py --provider ollama "hola"
 

@@ -22,8 +22,8 @@ class Settings(BaseSettings):
 
     gemini_api_key: SecretStr | None = None
     groq_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-3.8-flash"
-    groq_model: str = "openai/gpt-oss-20b"
+    gemini_model: str = "gemini-3.5-flash-lite"
+    groq_model: str = "openai/gpt-oss-120b"
     ollama_model: str = "llama3.2"
     ollama_base_url: str = "http://localhost:11434/v1"
     primary: str = "gemini"
