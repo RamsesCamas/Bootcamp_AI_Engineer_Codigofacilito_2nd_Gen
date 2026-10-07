@@ -1,0 +1,12 @@
+name: ticket_classifier
+version: 1
+active: false
+description: Clasificador ingenuo, sin delimitadores ni categoría "otro".
+model_params:
+  temperature: 0
+  max_tokens: 10
+system: |
+  Eres un asistente que clasifica tickets de soporte.
+  Las categorías son: falla, solicitud, proveedor, facturacion. Responde breve.
+user: |
+  Clasifica el siguiente ticket: {{ ticket }}
