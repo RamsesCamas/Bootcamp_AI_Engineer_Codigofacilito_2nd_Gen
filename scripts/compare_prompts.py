@@ -31,6 +31,9 @@ COMPANY = "Acme Operaciones"
 DEFAULT_DATASET = ROOT / "data" / "tickets_etiquetados.jsonl"
 DEFAULT_ATTACK = ROOT / "data" / "tickets_ataque.jsonl"
 _STRIP = string.whitespace + string.punctuation + "¿¡«»“”‘’…"
+# Una evaluación por lotes choca con el límite por minuto del free tier (HTTP 429).
+# Con 6 reintentos el backoff espera hasta ~1 min (1+2+4+8+16+32 s) y la ventana se libera.
+BATCH_MAX_RETRIES = 6
 
 
 # --- Lógica pura (se prueba sin red) -------------------------------------------------
@@ -52,6 +55,7 @@ class CallResult:
     tokens_out: int = 0
     cost_usd: float = 0.0
     attack: bool = False
+    error: str | None = None  # Falla del proveedor (no es culpa del prompt).
 
     @property
     def prediction(self) -> str:
@@ -59,7 +63,7 @@ class CallResult:
 
     @property
     def in_format(self) -> bool:
-        return self.prediction in CATEGORIES
+        return self.error is None and self.prediction in CATEGORIES
 
     @property
     def correct(self) -> bool:
@@ -76,6 +80,7 @@ class VersionSummary:
     cost_per_1k: float
     attacks_resisted: int
     attacks_total: int
+    errors: int = 0
 
 
 def summarize(version: int, results: list[CallResult]) -> VersionSummary:
@@ -87,11 +92,12 @@ def summarize(version: int, results: list[CallResult]) -> VersionSummary:
         version=version,
         correct=sum(r.correct for r in dataset),
         total=n,
-        out_of_format=sum(not r.in_format for r in dataset),
+        out_of_format=sum(not r.in_format and r.error is None for r in dataset),
         avg_tokens=sum(r.tokens_in + r.tokens_out for r in dataset) / n if n else 0.0,
         cost_per_1k=1000 * sum(r.cost_usd for r in dataset) / n if n else 0.0,
         attacks_resisted=sum(r.correct for r in attacks),
         attacks_total=len(attacks),
+        errors=sum(r.error is not None for r in results),
     )
 
 
@@ -118,10 +124,18 @@ def format_table(summaries: list[VersionSummary]) -> str:
     widths = [max(len(row[i]) for row in [headers, *rows]) for i in range(len(headers))]
     lines = [" | ".join(cell.ljust(w) for cell, w in zip(row, widths, strict=True)) for row in rows]
     header = " | ".join(h.ljust(w) for h, w in zip(headers, widths, strict=True))
-    return "\n".join([header, "-+-".join("-" * w for w in widths), *lines])
+    notes = [
+        f"Aviso: v{s.version} tuvo {s.errors} llamada(s) con error del proveedor; "
+        "cuentan como fallo, no como fuera de formato."
+        for s in summaries
+        if s.errors
+    ]
+    return "\n".join([header, "-+-".join("-" * w for w in widths), *lines, *notes])
 
 
 def describe(result: CallResult) -> str:
+    if result.error is not None:
+        return f"error del proveedor ({result.error})"
     if result.in_format:
         return result.prediction
     return f"{result.raw.strip()[:30]!r} (fuera de formato)"
@@ -164,7 +178,9 @@ def run_version(
         try:
             response = client.generate(messages, log_extra=log_extra, **prompt.model_params)
         except AllProvidersFailedError as e:
-            result.raw = f"<error: {e.errors[-1]}>" if e.errors else "<error>"
+            last = e.errors[-1] if e.errors else None
+            code = getattr(last, "status_code", None)
+            result.error = f"HTTP {code}" if code else type(last).__name__
         else:
             result.raw = response.text
             result.tokens_in = response.tokens_in
@@ -200,7 +216,8 @@ def main(argv: list[str] | None = None) -> int:
         for version in versions:
             kit.get(args.name, version)  # Falla antes de gastar llamadas si algo está mal.
         overrides = {"primary": args.provider} if args.provider else {}
-        client = LLMClient.from_settings(Settings(fallbacks=[], **overrides))
+        settings = Settings(fallbacks=[], max_retries=BATCH_MAX_RETRIES, **overrides)
+        client = LLMClient.from_settings(settings)
     except (PromptNotFoundError, ValueError, NotImplementedError) as e:
         if isinstance(e, ValidationError):
             e = "; ".join(err["msg"].removeprefix("Value error, ") for err in e.errors())

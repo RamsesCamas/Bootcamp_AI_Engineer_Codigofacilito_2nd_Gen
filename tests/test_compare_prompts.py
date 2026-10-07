@@ -97,3 +97,15 @@ def test_no_evaluation_leak_between_examples_and_datasets():
                 assert normalize(a) != normalize(b), f"Texto repetido en {name_a} y {name_b}: {a}"
                 ratio = SequenceMatcher(None, normalize(a), normalize(b)).ratio()
                 assert ratio < 0.7, f"Texto casi igual en {name_a} y {name_b}: {a!r} ~ {b!r}"
+
+
+def test_provider_error_is_a_failure_but_not_out_of_format():
+    results = [
+        CallResult("T-1", "falla", "falla"),
+        CallResult("T-2", "otro", "", error="HTTP 429"),
+        CallResult("T-3", "otro", "no sé"),
+    ]
+    s = summarize(1, results)
+    assert (s.correct, s.out_of_format, s.errors) == (1, 1, 1)
+    assert "error del proveedor" in format_table([s])
+    assert "HTTP 429" in failures({1: results})[0]
