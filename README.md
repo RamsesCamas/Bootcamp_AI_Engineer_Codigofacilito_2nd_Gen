@@ -100,6 +100,66 @@ flowchart LR
 | 5 | 20 min | Completa `scripts/report.py`: costo total, latencia p50/p95, % de fallback y llamadas por proveedor |
 | Bonus | — | Agrega `--temperature` (0–2) a `main.py` y pásalo al proveedor |
 
+## Clase 2: prompt engineering y context engineering
+
+### Qué se agrega y por qué
+
+- **Prompts versionados** (`prompting/`, `prompts/`): los prompts salen del código y viven en YAML con versión. Así se comparan versiones con datos, se registra en el log qué versión respondió y se cambia de versión sin tocar Python.
+- **Contexto con presupuesto** (`context/`): el `ContextManager` reparte tokens por sección (system, ejemplos, historial, documentos, pregunta y salida reservada). Si algo no cabe, descarta lo de menor prioridad y más antiguo, y nunca recorta el system.
+- **Prompt injection** (`data/tickets_ataque.jsonl`): tickets que intentan darle órdenes al clasificador. Los delimitadores de la v2 reducen el riesgo, pero no lo eliminan.
+
+### Formato de un archivo de prompt
+
+Cada prompt vive en `prompts/<nombre>/v<N>.yaml`:
+
+```yaml
+name: ticket_classifier        # igual al nombre de la carpeta
+version: 2                     # igual al número del archivo (v2.yaml)
+active: true                   # exactamente una versión activa por prompt
+description: Clasificador con delimitadores y categoría "otro".
+model_params:                  # se pasan tal cual al proveedor
+  temperature: 0
+  max_tokens: 10
+system: |
+  Eres el clasificador de tickets del equipo de operaciones de {{ company }}.
+  ...
+user: |
+  <ticket>{{ ticket }}</ticket>
+```
+
+- Las plantillas son Jinja2 con `StrictUndefined`: si falta una variable, falla y dice cuál.
+- `categories` y `examples` (de `examples.jsonl`, si existe en la carpeta) están disponibles en la plantilla sin pasarlos.
+- `PromptKit().get("ticket_classifier")` devuelve la versión con `active: true`; `get("ticket_classifier", 1)` devuelve la v1 aunque no esté activa. Si hay cero o más de una activa, falla y dice qué archivos revisar.
+- Categorías válidas: `falla`, `solicitud`, `proveedor`, `facturacion`, `otro`.
+
+### Comandos
+
+```bash
+# Compara versiones sobre los 20 tickets etiquetados y los tickets de ataque
+uv run scripts/compare_prompts.py ticket_classifier --versions 1 2
+
+# Clasifica un ticket con la versión activa (o una específica)
+uv run main.py --prompt ticket_classifier --ticket T-1099
+uv run main.py --prompt ticket_classifier --prompt-version 1 --ticket T-1099
+
+# Muestra cómo el ContextManager recorta un historial largo (no llama al LLM)
+uv run scripts/context_demo.py
+uv run scripts/context_demo.py --budget-history 120
+```
+
+`compare_prompts.py` y `main.py --prompt` usan solo el proveedor primario si la cadena de fallbacks no se puede armar (por ejemplo, mientras `GroqProvider` siga pendiente). Cada llamada queda en `logs/llm_calls.jsonl` con `prompt_name` y `prompt_version`.
+
+### Práctica de la Clase 2
+
+1. Migra el system prompt de `main.py` (busca `TODO(clase-2)`) a `prompts/operator_assistant/v1.yaml` y cárgalo con `PromptKit`.
+2. Corre `uv run scripts/compare_prompts.py ticket_classifier --versions 1 2` y revisa qué tickets falla cada versión.
+3. Escribe `prompts/ticket_classifier/v3.yaml` con few-shot usando `examples.jsonl` (disponible como `examples` en la plantilla) y supera a la v2. Recuerda: solo una versión puede tener `active: true`.
+4. Comparte tus aciertos, tokens promedio, costo por 1,000 tickets y si tu v3 resiste `T-1099`.
+
+> Los resultados varían por modelo y entre corridas. Con 20 tickets, cada ticket vale 5 puntos porcentuales: no saques conclusiones de una diferencia de uno o dos tickets.
+
+Para ver la solución: `git switch solucion/clase-2`.
+
 ## Ver la solución
 
 ```bash
