@@ -159,3 +159,18 @@ def test_provider_builds_response_with_usage_and_cost(monkeypatch):
     assert captured["json"]["temperature"] == 0.3
     assert (response.text, response.tokens_in, response.tokens_out) == ("Hola", 1_500, 400)
     assert response.cost_usd == pytest.approx(0.00145)
+
+
+def test_log_extra_is_in_every_attempt(logger, log_path, fake_sleep):
+    rate_limited = TransientProviderError("gemini", "rate limit", 429)
+    primary = FakeProvider("gemini", [rate_limited, rate_limited, make_response("gemini")])
+    client = LLMClient([primary], logger, sleep=fake_sleep)
+    extra = {"prompt_name": "ticket_classifier", "prompt_version": 2}
+
+    client.generate(MESSAGES, log_extra=extra, temperature=0)
+
+    events = read_events(log_path)
+    assert len(events) == 3
+    assert all(e["prompt_name"] == "ticket_classifier" for e in events)
+    assert all(e["prompt_version"] == 2 for e in events)
+    assert primary.calls[0]["params"] == {"temperature": 0}

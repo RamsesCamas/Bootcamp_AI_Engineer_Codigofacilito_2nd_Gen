@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from core.llm_client import LLMClient
 from tests.conftest import FakeProvider, make_response, read_events
 
@@ -59,3 +61,40 @@ def test_logger_never_writes_secrets_or_prompt_text(logger, log_path, fake_sleep
     assert "Tu llave es" not in content
     [event] = read_events(log_path)
     assert event["prompt_chars"] == sum(len(m["content"]) for m in messages)
+
+
+def test_logger_with_log_extra_never_writes_prompt_text(logger, log_path, fake_sleep):
+    messages = [{"role": "user", "content": f"<ticket>Mi llave es {FAKE_SECRET}</ticket>"}]
+    response = make_response("gemini", text=f"Tu llave es {FAKE_SECRET}")
+    client = LLMClient([FakeProvider("gemini", [response])], logger, sleep=fake_sleep)
+    extra = {
+        "prompt_name": "ticket_classifier",
+        "prompt_version": 2,
+        "context_tokens": {"system": 120, "user": 30},
+        "context_truncated": ["history"],
+    }
+
+    client.generate(messages, log_extra=extra)
+
+    content = log_path.read_text(encoding="utf-8")
+    assert FAKE_SECRET not in content
+    assert "<ticket>" not in content
+    [event] = read_events(log_path)
+    assert {key: event[key] for key in extra} == extra
+
+
+def test_logger_rejects_unknown_extra_fields(logger):
+    with pytest.raises(TypeError):
+        logger.log(
+            provider="gemini",
+            model="m",
+            tokens_in=0,
+            tokens_out=0,
+            latency_ms=0,
+            cost_usd=0,
+            fallback=False,
+            success=True,
+            error_type=None,
+            prompt_chars=0,
+            prompt_text="esto no debe llegar al log",
+        )

@@ -52,14 +52,20 @@ class LLMClient:
         providers = [build_provider(name, settings) for name in names]
         return cls(providers, CallLogger(settings.log_path), settings.max_retries)
 
-    def generate(self, messages: list[dict], **params) -> LLMResponse:
+    def generate(
+        self, messages: list[dict], *, log_extra: dict | None = None, **params
+    ) -> LLMResponse:
         """Pide una respuesta recorriendo los proveedores en orden.
+
+        `log_extra` (por ejemplo `prompt_name` y `prompt_version`) se agrega tal cual a
+        cada evento del log de esta request, en todos los intentos.
 
         - `TransientProviderError`: reintenta con backoff 1 s -> 2 s -> 4 s + jitter.
         - `PermanentProviderError`: no reintenta; pasa al siguiente proveedor.
         - Si todos fallan: `AllProvidersFailedError`.
         """
         prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
+        extra = log_extra or {}
         errors: list[ProviderError] = []
 
         for index, provider in enumerate(self.providers):
@@ -69,7 +75,7 @@ class LLMClient:
                 try:
                     response = provider.generate(messages, **params)
                 except ProviderError as e:
-                    self._log_failure(provider, e, start, is_fallback, prompt_chars)
+                    self._log_failure(provider, e, start, is_fallback, prompt_chars, extra)
                     if isinstance(e, TransientProviderError) and attempt < self.max_retries:
                         self._sleep(2**attempt + random.uniform(0, 0.25))
                         continue
@@ -89,6 +95,7 @@ class LLMClient:
                     # ttft_ms (tiempo al primer token) requiere streaming; se mide en la
                     # Clase 16. Por ahora queda en null.
                     ttft_ms=None,
+                    **extra,
                 )
                 return response
 
@@ -101,6 +108,7 @@ class LLMClient:
         start: float,
         is_fallback: bool,
         prompt_chars: int,
+        extra: dict,
     ) -> None:
         self.logger.log(
             provider=provider.name,
@@ -114,4 +122,5 @@ class LLMClient:
             error_type=type(error).__name__,
             prompt_chars=prompt_chars,
             ttft_ms=None,
+            **extra,
         )

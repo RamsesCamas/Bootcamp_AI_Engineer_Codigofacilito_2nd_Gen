@@ -2,6 +2,9 @@
 
 Regla de oro: aquí nunca se escriben llaves, headers, ni el texto del prompt o de la
 respuesta. Del prompt solo se guarda su tamaño en caracteres (`prompt_chars`).
+
+Campos opcionales (Clase 2): `prompt_name`, `prompt_version`, `context_tokens` y
+`context_truncated`. Solo se escriben cuando vienen; si no, la línea no los incluye.
 """
 
 from __future__ import annotations
@@ -30,8 +33,16 @@ class CallLogger:
         error_type: str | None,
         prompt_chars: int,
         ttft_ms: float | None = None,
+        prompt_name: str | None = None,
+        prompt_version: int | None = None,
+        context_tokens: dict[str, int] | None = None,
+        context_truncated: list[str] | None = None,
     ) -> dict:
-        """Agrega un evento al archivo y lo devuelve."""
+        """Agrega un evento al archivo y lo devuelve.
+
+        Cualquier campo opcional que no esté en la firma lanza `TypeError`: así nadie
+        puede colar texto del prompt al log por accidente.
+        """
         event = {
             "request_id": uuid.uuid4().hex[:8],
             "timestamp": datetime.now(UTC).isoformat(),
@@ -47,6 +58,13 @@ class CallLogger:
             "error_type": error_type,
             "prompt_chars": prompt_chars,
         }
+        optional = {
+            "prompt_name": prompt_name,
+            "prompt_version": prompt_version,
+            "context_tokens": context_tokens,
+            "context_truncated": context_truncated,
+        }
+        event.update({key: value for key, value in optional.items() if value is not None})
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
