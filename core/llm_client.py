@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from core.errors import AllProvidersFailedError, ProviderError, TransientProviderError
@@ -14,6 +14,29 @@ if TYPE_CHECKING:
     from core.config import Settings
     from core.logger import CallLogger
     from core.providers import Provider
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    """Una herramienta que pidió el modelo. `arguments` es el string JSON tal como llega;
+    parsearlo y validarlo le toca a `contracts.tool_loop.execute_tool`."""
+
+    id: str
+    name: str
+    arguments: str
+    # Datos opacos del proveedor que hay que reenviar tal cual en el siguiente turno.
+    # Gemini 3 pone aquí su `thought_signature`; sin ella responde 400.
+    extra_content: dict | None = field(default=None, compare=False, repr=False)
+
+    def to_openai(self) -> dict:
+        call = {
+            "id": self.id,
+            "type": "function",
+            "function": {"name": self.name, "arguments": self.arguments},
+        }
+        if self.extra_content is not None:
+            call["extra_content"] = self.extra_content
+        return call
 
 
 @dataclass
@@ -25,6 +48,15 @@ class LLMResponse:
     tokens_out: int
     latency_ms: float
     cost_usd: float
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    finish_reason: str | None = None
+
+    def as_message(self) -> dict:
+        """Mensaje `assistant` listo para agregarse al historial (formato OpenAI)."""
+        message: dict = {"role": "assistant", "content": self.text or None}
+        if self.tool_calls:
+            message["tool_calls"] = [call.to_openai() for call in self.tool_calls]
+        return message
 
 
 class LLMClient:
@@ -53,19 +85,31 @@ class LLMClient:
         return cls(providers, CallLogger(settings.log_path), settings.max_retries)
 
     def generate(
-        self, messages: list[dict], *, log_extra: dict | None = None, **params
+        self,
+        messages: list[dict],
+        *,
+        log_extra: dict | None = None,
+        tools: list[dict] | None = None,
+        tool_choice: str | dict | None = None,
+        response_format: dict | None = None,
+        **params,
     ) -> LLMResponse:
         """Pide una respuesta recorriendo los proveedores en orden.
 
         `log_extra` (por ejemplo `prompt_name` y `prompt_version`) se agrega tal cual a
         cada evento del log de esta request, en todos los intentos.
 
+        `tools`, `tool_choice` y `response_format` se mandan al proveedor solo si no son
+        `None`. Si la respuesta pide herramientas, sus nombres quedan en el log (`tool_calls`).
+
         - `TransientProviderError`: reintenta con backoff 1 s -> 2 s -> 4 s + jitter.
         - `PermanentProviderError`: no reintenta; pasa al siguiente proveedor.
         - Si todos fallan: `AllProvidersFailedError`.
         """
-        prompt_chars = sum(len(str(m.get("content", ""))) for m in messages)
+        prompt_chars = sum(len(str(m.get("content") or "")) for m in messages)
         extra = log_extra or {}
+        optional = {"tools": tools, "tool_choice": tool_choice, "response_format": response_format}
+        params.update({key: value for key, value in optional.items() if value is not None})
         errors: list[ProviderError] = []
 
         for index, provider in enumerate(self.providers):
@@ -95,7 +139,7 @@ class LLMClient:
                     # ttft_ms (tiempo al primer token) requiere streaming; se mide en la
                     # Clase 16. Por ahora queda en null.
                     ttft_ms=None,
-                    **extra,
+                    **{"tool_calls": [c.name for c in response.tool_calls] or None, **extra},
                 )
                 return response
 

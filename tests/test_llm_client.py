@@ -6,9 +6,9 @@ from pydantic import ValidationError
 
 from core.config import Settings
 from core.errors import AllProvidersFailedError, PermanentProviderError, TransientProviderError
-from core.llm_client import LLMClient
+from core.llm_client import LLMClient, ToolCall
 from core.pricing import cost_usd
-from core.providers import GeminiProvider
+from core.providers import GeminiProvider, OllamaProvider
 from tests.conftest import FakeProvider, make_response, read_events
 
 MESSAGES = [{"role": "user", "content": "hola"}]
@@ -174,3 +174,76 @@ def test_log_extra_is_in_every_attempt(logger, log_path, fake_sleep):
     assert all(e["prompt_name"] == "ticket_classifier" for e in events)
     assert all(e["prompt_version"] == 2 for e in events)
     assert primary.calls[0]["params"] == {"temperature": 0}
+
+
+def test_provider_parses_tool_calls_and_keeps_extra_content(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json, headers, timeout):
+        captured.update(json)
+        body = {
+            "model": "gemini-3.8-flash",
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "buscar_ticket",
+                                    "arguments": '{"ticket_id": "T-1042"}',
+                                },
+                                "extra_content": {"google": {"thought_signature": "sig"}},
+                            }
+                        ],
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 50, "completion_tokens": 10},
+        }
+        return httpx.Response(200, json=body, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    tools = [{"type": "function", "function": {"name": "buscar_ticket", "parameters": {}}}]
+    response = GeminiProvider("gemini-3.8-flash", "llave-falsa").generate(MESSAGES, tools=tools)
+
+    assert captured["tools"] == tools
+    assert response.text == ""
+    assert response.finish_reason == "tool_calls"
+    [call] = response.tool_calls
+    assert (call.id, call.name, call.arguments) == (
+        "call_1",
+        "buscar_ticket",
+        '{"ticket_id": "T-1042"}',
+    )
+    message = response.as_message()
+    assert message["role"] == "assistant" and message["content"] is None
+    assert message["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "sig"}}
+    assert message["tool_calls"][0]["function"]["name"] == "buscar_ticket"
+
+
+def test_client_sends_optional_params_only_when_given(logger, log_path, fake_sleep):
+    call = ToolCall("call_1", "buscar_ticket", "{}")
+    response = make_response("gemini")
+    response.tool_calls.append(call)
+    primary = FakeProvider("gemini", [make_response("gemini"), response])
+    client = LLMClient([primary], logger, sleep=fake_sleep)
+
+    client.generate(MESSAGES)
+    client.generate(MESSAGES, tools=[{"type": "function"}], response_format={"type": "json_object"})
+
+    assert primary.calls[0]["params"] == {}
+    assert set(primary.calls[1]["params"]) == {"tools", "response_format"}
+    first, second = read_events(log_path)
+    assert "tool_calls" not in first
+    assert second["tool_calls"] == ["buscar_ticket"]
+
+
+def test_capabilities_by_provider():
+    assert GeminiProvider.supports_tools and GeminiProvider.supports_json_schema
+    assert OllamaProvider.supports_tools and not OllamaProvider.supports_json_schema
+    assert OllamaProvider.supports_json_object

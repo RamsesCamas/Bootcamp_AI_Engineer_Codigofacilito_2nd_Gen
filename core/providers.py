@@ -14,7 +14,7 @@ import httpx
 
 from core import pricing
 from core.errors import PermanentProviderError, TransientProviderError
-from core.llm_client import LLMResponse
+from core.llm_client import LLMResponse, ToolCall
 
 if TYPE_CHECKING:
     from pydantic import SecretStr
@@ -35,10 +35,19 @@ class OpenAICompatibleProvider:
 
     Las subclases solo fijan `name` y `base_url` como atributos de clase. También se
     pueden pasar al constructor para sobrescribirlos (por ejemplo, otra URL de Ollama).
+
+    Capacidades (verificadas en la documentación de cada proveedor; ver README):
+    - `supports_tools`: acepta `tools` y regresa `message.tool_calls`.
+    - `supports_json_schema`: acepta `response_format={"type": "json_schema", ...}`.
+    - `supports_json_object`: acepta `response_format={"type": "json_object"}`.
+    Los defaults de la base corresponden a Groq con `openai/gpt-oss-*`.
     """
 
     name: str = ""
     base_url: str = ""
+    supports_tools: bool = True
+    supports_json_schema: bool = True
+    supports_json_object: bool = True
 
     def __init__(
         self,
@@ -82,7 +91,18 @@ class OpenAICompatibleProvider:
 
         try:
             data = response.json()
-            text = data["choices"][0]["message"]["content"] or ""
+            choice = data["choices"][0]
+            message = choice["message"]
+            text = message.get("content") or ""
+            tool_calls = [
+                ToolCall(
+                    id=call["id"],
+                    name=call["function"]["name"],
+                    arguments=call["function"].get("arguments") or "{}",
+                    extra_content=call.get("extra_content"),
+                )
+                for call in message.get("tool_calls") or []
+            ]
         except (ValueError, KeyError, IndexError, TypeError) as e:
             raise PermanentProviderError(
                 self.name, f"respuesta inesperada: {e!r}", response.status_code
@@ -99,6 +119,8 @@ class OpenAICompatibleProvider:
             tokens_out=tokens_out,
             latency_ms=latency_ms,
             cost_usd=pricing.cost_usd(self.model, tokens_in, tokens_out, provider=self.name),
+            tool_calls=tool_calls,
+            finish_reason=choice.get("finish_reason"),
         )
 
 
@@ -114,11 +136,21 @@ class GeminiProvider(OpenAICompatibleProvider):
     # que los tres proveedores compartan el mismo adaptador base.
     name = "gemini"
     base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    # Capacidades: tools y json_schema documentados en /gemini-api/docs/openai;
+    # json_object no aparece en esa página, así que no se asume.
+    supports_tools = True
+    supports_json_schema = True
+    supports_json_object = False
 
 
 class OllamaProvider(OpenAICompatibleProvider):
     name = "ollama"
     base_url = "http://localhost:11434/v1"
+    # docs.ollama.com/api/openai-compatibility: `tools` y JSON mode sí; `tool_choice` no;
+    # json_schema en response_format no está confirmado, así que no se asume.
+    supports_tools = True
+    supports_json_schema = False
+    supports_json_object = True
 
 
 class GroqProvider(OpenAICompatibleProvider):

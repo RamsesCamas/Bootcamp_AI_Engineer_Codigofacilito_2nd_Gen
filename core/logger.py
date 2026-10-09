@@ -4,7 +4,9 @@ Regla de oro: aquí nunca se escriben llaves, headers, ni el texto del prompt o 
 respuesta. Del prompt solo se guarda su tamaño en caracteres (`prompt_chars`).
 
 Campos opcionales (Clase 2): `prompt_name`, `prompt_version`, `context_tokens` y
-`context_truncated`. Solo se escriben cuando vienen; si no, la línea no los incluye.
+`context_truncated`. Clase 3: `structured_schema`, `repair_attempt`, `tool_iteration` y
+`tool_calls` (solo nombres de herramientas, nunca sus argumentos). Solo se escriben cuando
+vienen; si no, la línea no los incluye.
 """
 
 from __future__ import annotations
@@ -37,6 +39,10 @@ class CallLogger:
         prompt_version: int | None = None,
         context_tokens: dict[str, int] | None = None,
         context_truncated: list[str] | None = None,
+        structured_schema: str | None = None,
+        repair_attempt: int | None = None,
+        tool_iteration: int | None = None,
+        tool_calls: list[str] | None = None,
     ) -> dict:
         """Agrega un evento al archivo y lo devuelve.
 
@@ -63,6 +69,10 @@ class CallLogger:
             "prompt_version": prompt_version,
             "context_tokens": context_tokens,
             "context_truncated": context_truncated,
+            "structured_schema": structured_schema,
+            "repair_attempt": repair_attempt,
+            "tool_iteration": tool_iteration,
+            "tool_calls": tool_calls,
         }
         event.update({key: value for key, value in optional.items() if value is not None})
         self.path.parent.mkdir(parents=True, exist_ok=True)
