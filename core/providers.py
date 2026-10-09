@@ -123,8 +123,7 @@ class OllamaProvider(OpenAICompatibleProvider):
 
 class GroqProvider(OpenAICompatibleProvider):
     name = "groq"
-    base_url="https://api.groq.com/openai/v1"
-
+    base_url = "https://api.groq.com/openai/v1"
 
 
 def build_provider(name: str, settings: Settings) -> Provider:
