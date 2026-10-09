@@ -98,3 +98,22 @@ def test_logger_rejects_unknown_extra_fields(logger):
             prompt_chars=0,
             prompt_text="esto no debe llegar al log",
         )
+
+
+def test_logger_never_writes_tool_arguments(logger, log_path, fake_sleep):
+    from core.llm_client import ToolCall
+
+    response = make_response("gemini", text="")
+    response.tool_calls.append(
+        ToolCall("c1", "buscar_ticket", f'{{"ticket_id": "T-1042", "nota": "{FAKE_SECRET}"}}')
+    )
+    client = LLMClient([FakeProvider("gemini", [response])], logger, sleep=fake_sleep)
+
+    client.generate([{"role": "user", "content": "hola"}], log_extra={"tool_iteration": 0})
+
+    content = log_path.read_text(encoding="utf-8")
+    assert FAKE_SECRET not in content
+    assert "T-1042" not in content
+    [event] = read_events(log_path)
+    assert event["tool_calls"] == ["buscar_ticket"]
+    assert event["tool_iteration"] == 0
