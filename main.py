@@ -6,6 +6,8 @@ Uso:
     uv run main.py --demo
     uv run main.py --prompt ticket_classifier --ticket T-1099
     uv run main.py --prompt ticket_classifier --prompt-version 1 "No abre el ERP"
+    uv run main.py --structured --ticket T-1042
+    uv run main.py --tools "¿Cómo va el T-1042?"
 """
 
 from __future__ import annotations
@@ -17,9 +19,17 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from contracts import (
+    BUSCAR_TICKET,
+    MaxIterationsError,
+    StructuredOutputError,
+    TicketClassification,
+    generate_structured,
+    run_tool_loop,
+)
 from core.config import KNOWN_PROVIDERS, Settings, get_settings
 from core.errors import AllProvidersFailedError
-from core.llm_client import LLMClient
+from core.llm_client import LLMClient, ToolCall
 from prompting import PromptKit, PromptNotFoundError
 
 # TODO(clase-2): migra este system prompt a prompts/operator_assistant/v1.yaml y cárgalo con PromptKit. # noqa: E501
@@ -35,7 +45,16 @@ TICKETS_PATH = Path(__file__).parent / "data" / "tickets_ejemplo.jsonl"
 DATA_DIR = Path(__file__).parent / "data"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 # Variables fijas por prompt; `ticket` sale de --ticket o del texto de la línea de comandos.
-PROMPT_VARIABLES = {"ticket_classifier": {"company": "Acme Operaciones"}}
+PROMPT_VARIABLES = {
+    "ticket_classifier": {"company": "Acme Operaciones"},
+    "ticket_triage": {"company": "Acme Operaciones"},
+    "operator_tools": {"company": "Acme Operaciones"},
+}
+TICKETS_DB_PATH = DATA_DIR / "tickets_db.json"
+
+# Herramientas disponibles en el modo --tools.
+TOOLS = [BUSCAR_TICKET]
+TOOL_RESULT_PREVIEW = 120  # Caracteres que se muestran de cada resultado en pantalla.
 
 GRAY = "\033[90m"
 RESET = "\033[0m"
@@ -69,23 +88,82 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--prompt-version", type=int, metavar="N", help="Versión del prompt (requiere --prompt)."
     )
     parser.add_argument(
-        "--ticket", metavar="ID", help="Usa la descripción de un ticket de data/*.jsonl."
+        "--ticket",
+        metavar="ID",
+        help="Usa la descripción de un ticket de data/*.jsonl o data/tickets_db.json.",
+    )
+    parser.add_argument(
+        "--structured",
+        action="store_true",
+        help="Clasifica el ticket y regresa un TicketClassification en JSON (Clase 3).",
+    )
+    parser.add_argument(
+        "--tools",
+        action="store_true",
+        help="Responde la pregunta con herramientas, como buscar_ticket (Clase 3).",
     )
     args = parser.parse_args(argv)
     if args.prompt is None and not (args.demo or args.ticket):
         parser.error("falta el texto a enviar (o usa --demo o --ticket).")
     if args.prompt_version is not None and not args.prompt_name:
         parser.error("--prompt-version requiere --prompt.")
+    if args.structured and args.tools:
+        parser.error("--structured y --tools no se pueden usar juntos.")
+    if (args.structured or args.tools) and (args.prompt_name or args.demo):
+        parser.error("--structured y --tools usan su propio prompt: quita --prompt o --demo.")
+    if args.tools and (args.prompt is None or args.ticket):
+        parser.error('--tools necesita la pregunta como texto, por ejemplo "¿Cómo va el T-1042?".')
     return args
 
 
 def find_ticket(ticket_id: str) -> dict:
-    """Busca un ticket por `id` en todos los data/*.jsonl."""
+    """Busca un ticket por `id` en todos los data/*.jsonl y en data/tickets_db.json."""
     for path in sorted(DATA_DIR.glob("*.jsonl")):
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip() and (ticket := json.loads(line)).get("id") == ticket_id:
                 return ticket
-    raise LookupError(f"No encontré el ticket {ticket_id} en {DATA_DIR}/*.jsonl.")
+    for ticket in json.loads(TICKETS_DB_PATH.read_text(encoding="utf-8")):
+        if ticket["id"] == ticket_id:
+            return ticket
+    raise LookupError(f"No encontré el ticket {ticket_id} en {DATA_DIR}.")
+
+
+def print_tool_event(kind: str, call: ToolCall, result: dict | None) -> None:
+    """Muestra el ciclo de herramientas: → lo que pide el modelo, ← lo que regresa."""
+    if kind == "call":
+        print(f"{GRAY}→ {call.name} {call.arguments}{RESET}")
+        return
+    content = result["content"] if result else ""
+    if len(content) > TOOL_RESULT_PREVIEW:
+        content = content[: TOOL_RESULT_PREVIEW - 1] + "…"
+    print(f"{GRAY}← {content}{RESET}")
+
+
+def run_structured(client: LLMClient, text: str) -> int:
+    prompt = PromptKit(PROMPTS_DIR).get("ticket_triage")
+    messages = prompt.render(**PROMPT_VARIABLES[prompt.name], ticket=text)
+    log_extra = {"prompt_name": prompt.name, "prompt_version": prompt.version}
+    result = generate_structured(
+        client, messages, TicketClassification, log_extra=log_extra, **prompt.model_params
+    )
+    print(result.model_dump_json(indent=2))
+    return 0
+
+
+def run_tools(client: LLMClient, question: str) -> int:
+    prompt = PromptKit(PROMPTS_DIR).get("operator_tools")
+    messages = prompt.render(**PROMPT_VARIABLES[prompt.name], message=question)
+    log_extra = {"prompt_name": prompt.name, "prompt_version": prompt.version}
+    answer = run_tool_loop(
+        client,
+        messages,
+        TOOLS,
+        log_extra=log_extra,
+        on_event=print_tool_event,
+        **prompt.model_params,
+    )
+    print(answer.strip())
+    return 0
 
 
 def demo_prompt() -> str:
@@ -160,6 +238,17 @@ def main(argv: list[str] | None = None) -> int:
         return fail(config_error(e))
     except NotImplementedError as e:
         return fail(str(e))
+
+    if args.structured or args.tools:
+        try:
+            return run_structured(client, text) if args.structured else run_tools(client, text)
+        except StructuredOutputError as e:
+            return fail(f"el modelo no devolvió un ticket válido. {e}")
+        except MaxIterationsError as e:
+            return fail(f"no hubo respuesta final. {e}")
+        except AllProvidersFailedError as e:
+            lines = "\n".join(f"  - {type(err).__name__}: {err}" for err in e.errors)
+            return fail(f"ningún proveedor pudo responder.\n{lines}")
 
     try:
         response = client.generate(messages, log_extra=log_extra, **params)
