@@ -122,16 +122,9 @@ class OllamaProvider(OpenAICompatibleProvider):
 
 
 class GroqProvider(OpenAICompatibleProvider):
-    # TODO(clase-1): implementa el adaptador de Groq en 3 pasos.
-    #   1. Busca en la documentación de Groq el endpoint compatible con OpenAI
-    #      (https://console.groq.com/docs/openai).
-    #   2. Fija `name = "groq"` y `base_url = "..."` como atributos de clase, igual que
-    #      GeminiProvider.
-    #   3. Borra este __init__ y prueba: uv run main.py --provider groq "hola"
-    def __init__(self, *args, **kwargs) -> None:
-        raise NotImplementedError(
-            "TODO(clase-1): implementa el adaptador de Groq. Pista: mira GeminiProvider."
-        )
+    name = "groq"
+    base_url="https://api.groq.com/openai/v1"
+
 
 
 def build_provider(name: str, settings: Settings) -> Provider:
