@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LABELED = ROOT / "data" / "tickets_etiquetados.jsonl"
 ATTACKS = ROOT / "data" / "tickets_ataque.jsonl"
 EXAMPLES = ROOT / "prompts" / "ticket_classifier" / "examples.jsonl"
+TICKETS_DB = ROOT / "data" / "tickets_db.json"
 
 
 def load(path: Path) -> list[dict]:
@@ -90,6 +91,7 @@ def test_no_evaluation_leak_between_examples_and_datasets():
         "examples": [e["ticket"] for e in load(EXAMPLES)],
         "etiquetados": [t["descripcion"] for t in load(LABELED)],
         "ataque": [t["descripcion"] for t in load(ATTACKS)],
+        "tickets_db": [t["descripcion"] for t in json.loads(TICKETS_DB.read_text("utf-8"))],
     }
     for (name_a, group_a), (name_b, group_b) in combinations(texts.items(), 2):
         for a in group_a:

@@ -1,0 +1,50 @@
+[
+  {
+    "nombre": "PagosRed",
+    "servicio": "Pasarela de pagos con tarjeta",
+    "sla_horas": 4,
+    "estado": "incidente",
+    "contacto": "soporte@pagosred.example",
+    "contratos_vigentes": 1
+  },
+  {
+    "nombre": "NubeHost",
+    "servicio": "Hospedaje del portal de proveedores y del sitio web",
+    "sla_horas": 2,
+    "estado": "activo",
+    "contacto": "mesa@nubehost.example",
+    "contratos_vigentes": 2
+  },
+  {
+    "nombre": "Empaques del Bajío",
+    "servicio": "Cajas, película estirable y material de empaque",
+    "sla_horas": 48,
+    "estado": "activo",
+    "contacto": "ventas@empaquesbajio.example",
+    "contratos_vigentes": 1
+  },
+  {
+    "nombre": "Limpieza Integral",
+    "servicio": "Limpieza de oficinas y áreas comunes",
+    "sla_horas": 24,
+    "estado": "activo",
+    "contacto": "operaciones@limpiezaintegral.example",
+    "contratos_vigentes": 1
+  },
+  {
+    "nombre": "Transportes Sierra",
+    "servicio": "Fletes y rutas de distribución regional",
+    "sla_horas": 12,
+    "estado": "suspendido",
+    "contacto": "trafico@transportessierra.example",
+    "contratos_vigentes": 0
+  },
+  {
+    "nombre": "ImpreTec",
+    "servicio": "Arrendamiento y mantenimiento de impresoras",
+    "sla_horas": 8,
+    "estado": "activo",
+    "contacto": "servicio@impretec.example",
+    "contratos_vigentes": 1
+  }
+]

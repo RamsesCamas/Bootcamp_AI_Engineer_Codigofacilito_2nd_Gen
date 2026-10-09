@@ -1,0 +1,948 @@
+[
+  {
+    "id": "T-1001",
+    "asunto": "Correo corporativo lento",
+    "descripcion": "Los mensajes con adjuntos tardan más de diez minutos en llegar a las bandejas del área comercial.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-02",
+        "nota": "Se revisa la cola del servidor de correo."
+      },
+      {
+        "fecha": "2026-09-04",
+        "nota": "Se libera espacio en el almacenamiento de adjuntos."
+      },
+      {
+        "fecha": "2026-09-06",
+        "nota": "Usuarios confirman entrega normal."
+      }
+    ]
+  },
+  {
+    "id": "T-1002",
+    "asunto": "Cambio de cuenta de nómina",
+    "descripcion": "Una colaboradora de almacén pide depositar su sueldo en un banco distinto a partir de la siguiente quincena.",
+    "estado": "resuelto",
+    "equipo": "Recursos Humanos",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-03",
+        "nota": "Se reciben los datos por el portal interno."
+      },
+      {
+        "fecha": "2026-09-05",
+        "nota": "Cambio aplicado para la siguiente quincena."
+      }
+    ]
+  },
+  {
+    "id": "T-1003",
+    "asunto": "Cobro con tarjeta rechazado en tienda en línea",
+    "descripcion": "Clientes reportan que el pago con tarjeta se rechaza al final del carrito aunque tengan saldo.",
+    "estado": "esperando proveedor",
+    "equipo": "Finanzas",
+    "prioridad": "alta",
+    "proveedor": "PagosRed",
+    "historial": [
+      {
+        "fecha": "2026-09-04",
+        "nota": "Se reproducen tres rechazos con tarjetas de prueba."
+      },
+      {
+        "fecha": "2026-09-06",
+        "nota": "Se abre caso con la pasarela de pagos."
+      },
+      {
+        "fecha": "2026-09-08",
+        "nota": "La pasarela confirma intermitencia en su autorizador."
+      }
+    ]
+  },
+  {
+    "id": "T-1004",
+    "asunto": "Caja de herramientas faltante",
+    "descripcion": "En mantenimiento no aparece una caja de herramientas que se usó en el turno nocturno.",
+    "estado": "abierto",
+    "equipo": "Mantenimiento",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-05",
+        "nota": "Se pide revisar la bitácora de préstamo."
+      }
+    ]
+  },
+  {
+    "id": "T-1005",
+    "asunto": "Certificado del sitio por vencer",
+    "descripcion": "El certificado de seguridad del sitio web vence en cinco días y el panel muestra una alerta amarilla.",
+    "estado": "en revisión",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": "NubeHost",
+    "historial": [
+      {
+        "fecha": "2026-09-06",
+        "nota": "Se detecta la alerta en el panel de monitoreo."
+      },
+      {
+        "fecha": "2026-09-08",
+        "nota": "Se solicita al hospedaje la renovación automática."
+      }
+    ]
+  },
+  {
+    "id": "T-1006",
+    "asunto": "Cajas con medidas incorrectas",
+    "descripcion": "El último lote de cajas llegó dos centímetros más angosto y los productos no cierran bien.",
+    "estado": "esperando proveedor",
+    "equipo": "Logística",
+    "prioridad": "media",
+    "proveedor": "Empaques del Bajío",
+    "historial": [
+      {
+        "fecha": "2026-09-07",
+        "nota": "Se separa el lote y se toman fotos."
+      },
+      {
+        "fecha": "2026-09-09",
+        "nota": "Se envía reclamo con las medidas."
+      },
+      {
+        "fecha": "2026-09-11",
+        "nota": "El proveedor programa visita de calidad."
+      }
+    ]
+  },
+  {
+    "id": "T-1007",
+    "asunto": "Licencia de diseño vencida",
+    "descripcion": "El software de diseño del área de marketing pide reactivar la licencia anual.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-08",
+        "nota": "Compras autoriza la renovación."
+      },
+      {
+        "fecha": "2026-09-10",
+        "nota": "Licencia activada en los cuatro equipos."
+      }
+    ]
+  },
+  {
+    "id": "T-1008",
+    "asunto": "Baños del piso 1 sin insumos",
+    "descripcion": "Desde el martes los baños del primer piso no tienen papel ni jabón por la tarde.",
+    "estado": "en revisión",
+    "equipo": "Mantenimiento",
+    "prioridad": "baja",
+    "proveedor": "Limpieza Integral",
+    "historial": [
+      {
+        "fecha": "2026-09-09",
+        "nota": "Se reporta al supervisor de limpieza."
+      },
+      {
+        "fecha": "2026-09-11",
+        "nota": "Se acuerda una ronda extra a las 15:00."
+      }
+    ]
+  },
+  {
+    "id": "T-1009",
+    "asunto": "Ruta norte sin unidad asignada",
+    "descripcion": "La ruta de distribución del norte no tiene camión asignado para el miércoles y hay pedidos comprometidos.",
+    "estado": "abierto",
+    "equipo": "Logística",
+    "prioridad": "alta",
+    "proveedor": "Transportes Sierra",
+    "historial": [
+      {
+        "fecha": "2026-09-10",
+        "nota": "Se pide unidad al transportista."
+      },
+      {
+        "fecha": "2026-09-12",
+        "nota": "El transportista no responde; su contrato está suspendido."
+      },
+      {
+        "fecha": "2026-09-14",
+        "nota": "Se buscan alternativas con otros fletes."
+      }
+    ]
+  },
+  {
+    "id": "T-1010",
+    "asunto": "Acceso a carpeta de auditoría",
+    "descripcion": "El despacho de auditoría externa necesita acceso de lectura a la carpeta de cierres del año pasado.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-11",
+        "nota": "Se valida la solicitud con Finanzas."
+      },
+      {
+        "fecha": "2026-09-13",
+        "nota": "Acceso temporal otorgado por 30 días."
+      }
+    ]
+  },
+  {
+    "id": "T-1011",
+    "asunto": "Impresora de nómina atasca hojas",
+    "descripcion": "La impresora del área de nómina atasca cada tercera hoja al imprimir los recibos.",
+    "estado": "esperando proveedor",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": "ImpreTec",
+    "historial": [
+      {
+        "fecha": "2026-09-12",
+        "nota": "Se limpia el rodillo sin éxito."
+      },
+      {
+        "fecha": "2026-09-14",
+        "nota": "Se pide visita técnica al arrendador."
+      }
+    ]
+  },
+  {
+    "id": "T-1012",
+    "asunto": "Reembolso de viáticos atrasado",
+    "descripcion": "Un ejecutivo de ventas lleva tres semanas esperando el reembolso de su viaje a Monterrey.",
+    "estado": "en revisión",
+    "equipo": "Finanzas",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-13",
+        "nota": "Se localizan los comprobantes."
+      },
+      {
+        "fecha": "2026-09-15",
+        "nota": "Falta una firma del gerente."
+      }
+    ]
+  },
+  {
+    "id": "T-1013",
+    "asunto": "Alta de producto en catálogo",
+    "descripcion": "Comercial pide dar de alta tres presentaciones nuevas de producto en el catálogo del ERP.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-14",
+        "nota": "Se reciben fichas técnicas."
+      },
+      {
+        "fecha": "2026-09-16",
+        "nota": "Productos dados de alta."
+      }
+    ]
+  },
+  {
+    "id": "T-1014",
+    "asunto": "Conciliación de pagos con diferencias",
+    "descripcion": "La conciliación bancaria de septiembre muestra 14 cobros con tarjeta que no aparecen en el estado de cuenta.",
+    "estado": "esperando proveedor",
+    "equipo": "Finanzas",
+    "prioridad": "alta",
+    "proveedor": "PagosRed",
+    "historial": [
+      {
+        "fecha": "2026-09-15",
+        "nota": "Se exporta el detalle de cobros."
+      },
+      {
+        "fecha": "2026-09-17",
+        "nota": "Se envía la lista a la pasarela."
+      },
+      {
+        "fecha": "2026-09-19",
+        "nota": "La pasarela pide 48 horas para revisar."
+      }
+    ]
+  },
+  {
+    "id": "T-1015",
+    "asunto": "Aire acondicionado del site",
+    "descripcion": "El aire acondicionado del cuarto de servidores se apaga solo por las noches.",
+    "estado": "en revisión",
+    "equipo": "Mantenimiento",
+    "prioridad": "alta",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-16",
+        "nota": "Se instala un registrador de temperatura."
+      },
+      {
+        "fecha": "2026-09-18",
+        "nota": "Técnico interno revisa el termostato."
+      }
+    ]
+  },
+  {
+    "id": "T-1016",
+    "asunto": "Página de cotizaciones muy lenta",
+    "descripcion": "La sección de cotizaciones del portal tarda casi un minuto en cargar desde la migración de servidor.",
+    "estado": "en revisión",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": "NubeHost",
+    "historial": [
+      {
+        "fecha": "2026-09-17",
+        "nota": "Se mide el tiempo de respuesta."
+      },
+      {
+        "fecha": "2026-09-19",
+        "nota": "Se comparte el reporte con el hospedaje."
+      },
+      {
+        "fecha": "2026-09-21",
+        "nota": "El hospedaje sugiere ajustar la caché."
+      }
+    ]
+  },
+  {
+    "id": "T-1017",
+    "asunto": "Capacitación de seguridad pendiente",
+    "descripcion": "Doce personas de almacén no han tomado el curso obligatorio de seguridad industrial.",
+    "estado": "abierto",
+    "equipo": "Recursos Humanos",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-18",
+        "nota": "Se envía recordatorio a jefes de turno."
+      }
+    ]
+  },
+  {
+    "id": "T-1018",
+    "asunto": "Tarimas dañadas en recepción",
+    "descripcion": "Llegaron cuatro tarimas rotas con el último pedido de película estirable.",
+    "estado": "resuelto",
+    "equipo": "Logística",
+    "prioridad": "baja",
+    "proveedor": "Empaques del Bajío",
+    "historial": [
+      {
+        "fecha": "2026-09-19",
+        "nota": "Se documenta el daño."
+      },
+      {
+        "fecha": "2026-09-21",
+        "nota": "El proveedor repone las tarimas."
+      }
+    ]
+  },
+  {
+    "id": "T-1019",
+    "asunto": "Teléfono de recepción sin tono",
+    "descripcion": "El teléfono de la recepción principal no tiene tono desde la mañana.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-20",
+        "nota": "Se cambia el cable de red."
+      },
+      {
+        "fecha": "2026-09-22",
+        "nota": "Línea restablecida."
+      }
+    ]
+  },
+  {
+    "id": "T-1020",
+    "asunto": "Solicitud de estacionamiento para visitas",
+    "descripcion": "Dirección pide reservar cinco lugares de estacionamiento para un consejo el próximo jueves.",
+    "estado": "resuelto",
+    "equipo": "Mantenimiento",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-01",
+        "nota": "Lugares reservados y señalizados."
+      }
+    ]
+  },
+  {
+    "id": "T-1021",
+    "asunto": "Contrato de limpieza sin firma",
+    "descripcion": "El anexo del contrato de limpieza para el nuevo almacén sigue sin firma del proveedor.",
+    "estado": "esperando proveedor",
+    "equipo": "Compras",
+    "prioridad": "media",
+    "proveedor": "Limpieza Integral",
+    "historial": [
+      {
+        "fecha": "2026-09-02",
+        "nota": "Se envía el anexo para firma."
+      },
+      {
+        "fecha": "2026-09-04",
+        "nota": "El proveedor pide ajustar el horario."
+      },
+      {
+        "fecha": "2026-09-06",
+        "nota": "Se reenvía con el horario corregido."
+      }
+    ]
+  },
+  {
+    "id": "T-1022",
+    "asunto": "Doble captura de pedidos",
+    "descripcion": "Ventas captura los pedidos en el ERP y en una hoja de cálculo; piden eliminar la doble captura.",
+    "estado": "abierto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-03",
+        "nota": "Se agenda reunión de levantamiento."
+      }
+    ]
+  },
+  {
+    "id": "T-1023",
+    "asunto": "Factura de flete sin orden de compra",
+    "descripcion": "Llegó una factura de flete que no corresponde a ninguna orden de compra registrada.",
+    "estado": "en revisión",
+    "equipo": "Finanzas",
+    "prioridad": "media",
+    "proveedor": "Transportes Sierra",
+    "historial": [
+      {
+        "fecha": "2026-09-04",
+        "nota": "Se busca la orden en el ERP."
+      },
+      {
+        "fecha": "2026-09-06",
+        "nota": "No se encuentra; se pide aclaración al transportista."
+      }
+    ]
+  },
+  {
+    "id": "T-1024",
+    "asunto": "Tóner agotado en ventas",
+    "descripcion": "La impresora del área de ventas marca tóner agotado y no hay repuesto en almacén.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": "ImpreTec",
+    "historial": [
+      {
+        "fecha": "2026-09-05",
+        "nota": "Se solicita tóner al arrendador."
+      },
+      {
+        "fecha": "2026-09-07",
+        "nota": "Tóner entregado e instalado."
+      }
+    ]
+  },
+  {
+    "id": "T-1025",
+    "asunto": "Usuario bloqueado en el ERP",
+    "descripcion": "Un comprador quedó bloqueado en el ERP después de varios intentos fallidos de inicio de sesión.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-06",
+        "nota": "Se valida identidad."
+      },
+      {
+        "fecha": "2026-09-08",
+        "nota": "Contraseña restablecida."
+      }
+    ]
+  },
+  {
+    "id": "T-1026",
+    "asunto": "Fuga de agua en cocina",
+    "descripcion": "Hay una fuga debajo del fregadero de la cocina del segundo piso.",
+    "estado": "resuelto",
+    "equipo": "Mantenimiento",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-07",
+        "nota": "Se cierra la llave de paso."
+      },
+      {
+        "fecha": "2026-09-09",
+        "nota": "Plomero cambia la conexión."
+      }
+    ]
+  },
+  {
+    "id": "T-1027",
+    "asunto": "Respaldo nocturno incompleto",
+    "descripcion": "El respaldo nocturno de la base de datos terminó con advertencias dos noches seguidas.",
+    "estado": "en revisión",
+    "equipo": "TI",
+    "prioridad": "alta",
+    "proveedor": "NubeHost",
+    "historial": [
+      {
+        "fecha": "2026-09-08",
+        "nota": "Se revisan las bitácoras del respaldo."
+      },
+      {
+        "fecha": "2026-09-10",
+        "nota": "El hospedaje confirma falta de espacio en el volumen."
+      },
+      {
+        "fecha": "2026-09-12",
+        "nota": "Se solicita ampliación del volumen."
+      }
+    ]
+  },
+  {
+    "id": "T-1028",
+    "asunto": "Cambio de horario de comedor",
+    "descripcion": "El turno vespertino pide mover la hora de comida por la nueva jornada.",
+    "estado": "abierto",
+    "equipo": "Recursos Humanos",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-09",
+        "nota": "Se consulta a los jefes de turno."
+      }
+    ]
+  },
+  {
+    "id": "T-1029",
+    "asunto": "Nota de crédito por devolución",
+    "descripcion": "Un distribuidor devolvió mercancía dañada y solicita su nota de crédito.",
+    "estado": "en revisión",
+    "equipo": "Finanzas",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-10",
+        "nota": "Almacén confirma la devolución."
+      },
+      {
+        "fecha": "2026-09-12",
+        "nota": "Se prepara la nota de crédito."
+      }
+    ]
+  },
+  {
+    "id": "T-1030",
+    "asunto": "Escáner de almacén no lee códigos",
+    "descripcion": "Dos escáneres de mano del almacén no leen códigos de barras dañados por humedad.",
+    "estado": "abierto",
+    "equipo": "Logística",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-11",
+        "nota": "Se prueban escáneres de repuesto."
+      }
+    ]
+  },
+  {
+    "id": "T-1031",
+    "asunto": "Cotización de cajas para temporada alta",
+    "descripcion": "Compras necesita cotización de 20,000 cajas adicionales para la temporada de diciembre.",
+    "estado": "esperando proveedor",
+    "equipo": "Compras",
+    "prioridad": "media",
+    "proveedor": "Empaques del Bajío",
+    "historial": [
+      {
+        "fecha": "2026-09-12",
+        "nota": "Se envía la solicitud de cotización."
+      },
+      {
+        "fecha": "2026-09-14",
+        "nota": "El proveedor confirma que la enviará el viernes."
+      }
+    ]
+  },
+  {
+    "id": "T-1032",
+    "asunto": "Alta de correo para practicantes",
+    "descripcion": "Llegan seis practicantes de ingeniería y necesitan cuentas de correo temporales.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-13",
+        "nota": "Cuentas creadas con vigencia de seis meses."
+      }
+    ]
+  },
+  {
+    "id": "T-1033",
+    "asunto": "Cargos de comisión mayores a lo pactado",
+    "descripcion": "Las comisiones por cobro con tarjeta de octubre son mayores a las del contrato vigente.",
+    "estado": "abierto",
+    "equipo": "Finanzas",
+    "prioridad": "media",
+    "proveedor": "PagosRed",
+    "historial": [
+      {
+        "fecha": "2026-09-14",
+        "nota": "Se comparan tarifas contra el contrato."
+      },
+      {
+        "fecha": "2026-09-16",
+        "nota": "Se prepara reclamo formal."
+      }
+    ]
+  },
+  {
+    "id": "T-1034",
+    "asunto": "Silla ergonómica para contabilidad",
+    "descripcion": "Una persona de contabilidad pide una silla ergonómica por recomendación médica.",
+    "estado": "resuelto",
+    "equipo": "Recursos Humanos",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-15",
+        "nota": "Se aprueba la compra."
+      },
+      {
+        "fecha": "2026-09-17",
+        "nota": "Silla entregada."
+      }
+    ]
+  },
+  {
+    "id": "T-1035",
+    "asunto": "Puerta de andén atorada",
+    "descripcion": "La cortina del andén 2 se atora a medio camino y retrasa las descargas.",
+    "estado": "en revisión",
+    "equipo": "Mantenimiento",
+    "prioridad": "alta",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-16",
+        "nota": "Se lubrica el riel."
+      },
+      {
+        "fecha": "2026-09-18",
+        "nota": "Se pide refacción del motor."
+      }
+    ]
+  },
+  {
+    "id": "T-1036",
+    "asunto": "Pedido urgente sin transportista",
+    "descripcion": "Un cliente clave necesita su pedido el lunes y no hay transportista disponible para la ruta.",
+    "estado": "abierto",
+    "equipo": "Logística",
+    "prioridad": "alta",
+    "proveedor": "Transportes Sierra",
+    "historial": [
+      {
+        "fecha": "2026-09-17",
+        "nota": "El transportista habitual tiene el contrato suspendido."
+      },
+      {
+        "fecha": "2026-09-19",
+        "nota": "Se cotiza un flete especial."
+      }
+    ]
+  },
+  {
+    "id": "T-1037",
+    "asunto": "Actualización del antivirus",
+    "descripcion": "El antivirus de veinte equipos no se ha actualizado en dos semanas.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-18",
+        "nota": "Se fuerza la actualización desde la consola."
+      }
+    ]
+  },
+  {
+    "id": "T-1038",
+    "asunto": "Escáner de recepción sin red",
+    "descripcion": "El multifuncional de recepción imprime pero no envía escaneos por correo.",
+    "estado": "en revisión",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": "ImpreTec",
+    "historial": [
+      {
+        "fecha": "2026-09-19",
+        "nota": "Se revisa la configuración de correo del equipo."
+      },
+      {
+        "fecha": "2026-09-21",
+        "nota": "Se pide al arrendador actualizar el firmware."
+      }
+    ]
+  },
+  {
+    "id": "T-1039",
+    "asunto": "Reporte mensual de ventas",
+    "descripcion": "Dirección comercial pide automatizar el reporte mensual de ventas por región.",
+    "estado": "abierto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-20",
+        "nota": "Se documentan las fuentes del reporte."
+      }
+    ]
+  },
+  {
+    "id": "T-1040",
+    "asunto": "Extintores por recargar",
+    "descripcion": "Seis extintores del almacén tienen la recarga vencida desde el mes pasado.",
+    "estado": "en revisión",
+    "equipo": "Mantenimiento",
+    "prioridad": "alta",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-01",
+        "nota": "Se cotiza la recarga."
+      },
+      {
+        "fecha": "2026-09-03",
+        "nota": "Se programa el servicio."
+      }
+    ]
+  },
+  {
+    "id": "T-1041",
+    "asunto": "Clave de proveedor duplicada",
+    "descripcion": "En el padrón de proveedores aparecen dos claves distintas para la misma empresa de limpieza.",
+    "estado": "resuelto",
+    "equipo": "Compras",
+    "prioridad": "baja",
+    "proveedor": "Limpieza Integral",
+    "historial": [
+      {
+        "fecha": "2026-09-02",
+        "nota": "Se identifica la clave correcta."
+      },
+      {
+        "fecha": "2026-09-04",
+        "nota": "Se da de baja la duplicada."
+      }
+    ]
+  },
+  {
+    "id": "T-1042",
+    "asunto": "Factura duplicada de octubre",
+    "descripcion": "El cliente Distribuidora del Norte reporta que recibió dos facturas con el mismo folio por el servicio de octubre y le cargaron el monto dos veces a su tarjeta corporativa. Pide la cancelación de una y el reembolso.",
+    "estado": "en revisión",
+    "equipo": "Finanzas",
+    "prioridad": "alta",
+    "proveedor": "PagosRed",
+    "historial": [
+      {
+        "fecha": "2026-09-03",
+        "nota": "Finanzas confirma el doble cargo en el estado de cuenta del cliente."
+      },
+      {
+        "fecha": "2026-09-05",
+        "nota": "Se abre caso con la pasarela de pagos para revertir el cargo."
+      },
+      {
+        "fecha": "2026-09-07",
+        "nota": "La pasarela confirma un incidente en su conciliación; reembolso en proceso."
+      }
+    ]
+  },
+  {
+    "id": "T-1043",
+    "asunto": "Portal de proveedores caído",
+    "descripcion": "El portal de proveedores no carga desde las 9:00. Varios proveedores reportan error 503 al intentar subir sus facturas y hoy cierra el periodo de recepción.",
+    "estado": "en revisión",
+    "equipo": "TI",
+    "prioridad": "alta",
+    "proveedor": "NubeHost",
+    "historial": [
+      {
+        "fecha": "2026-09-04",
+        "nota": "Se confirma el error 503 desde varias redes."
+      },
+      {
+        "fecha": "2026-09-06",
+        "nota": "El hospedaje reporta falla en un balanceador."
+      },
+      {
+        "fecha": "2026-09-08",
+        "nota": "Se amplía un día el periodo de recepción de facturas."
+      }
+    ]
+  },
+  {
+    "id": "T-1044",
+    "asunto": "Alta de usuario en el ERP",
+    "descripcion": "Se incorporó una nueva analista al área de compras y necesita acceso de solo lectura a los módulos de órdenes de compra e inventario a partir del lunes.",
+    "estado": "resuelto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-05",
+        "nota": "Usuario creado con perfil de solo lectura."
+      }
+    ]
+  },
+  {
+    "id": "T-1045",
+    "asunto": "Impresora del piso 3 sin conexión",
+    "descripcion": "La impresora compartida del piso 3 aparece fuera de línea para todos los equipos desde ayer por la tarde. Ya se reinició y el problema continúa.",
+    "estado": "esperando proveedor",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": "ImpreTec",
+    "historial": [
+      {
+        "fecha": "2026-09-06",
+        "nota": "Se reinicia la impresora sin éxito."
+      },
+      {
+        "fecha": "2026-09-08",
+        "nota": "Se solicita visita técnica al arrendador."
+      }
+    ]
+  },
+  {
+    "id": "T-1046",
+    "asunto": "Retraso en entrega de insumos",
+    "descripcion": "El proveedor de material de empaque avisó que la entrega programada para el jueves se retrasará una semana por falta de inventario. Producción necesita saber si hay proveedor alterno.",
+    "estado": "esperando proveedor",
+    "equipo": "Compras",
+    "prioridad": "alta",
+    "proveedor": "Empaques del Bajío",
+    "historial": [
+      {
+        "fecha": "2026-09-07",
+        "nota": "El proveedor confirma una semana de retraso."
+      },
+      {
+        "fecha": "2026-09-09",
+        "nota": "Producción pide cotizar un proveedor alterno."
+      }
+    ]
+  },
+  {
+    "id": "T-1047",
+    "asunto": "Error al timbrar notas de crédito",
+    "descripcion": "Desde la actualización del sistema de facturación, las notas de crédito fallan al timbrar con el mensaje 'certificado no válido'. Las facturas normales sí se timbran correctamente.",
+    "estado": "en revisión",
+    "equipo": "Finanzas",
+    "prioridad": "alta",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-08",
+        "nota": "Se reproduce el error de certificado."
+      },
+      {
+        "fecha": "2026-09-10",
+        "nota": "Se revisa la configuración del sistema de facturación."
+      }
+    ]
+  },
+  {
+    "id": "T-1048",
+    "asunto": "Solicitud de laptop para nuevo ingreso",
+    "descripcion": "Recursos Humanos solicita una laptop con la imagen estándar de ventas para un ejecutivo que ingresa el próximo 15 del mes.",
+    "estado": "abierto",
+    "equipo": "TI",
+    "prioridad": "baja",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-09",
+        "nota": "Se reserva equipo del inventario."
+      }
+    ]
+  },
+  {
+    "id": "T-1049",
+    "asunto": "VPN se desconecta cada 10 minutos",
+    "descripcion": "Cinco personas del equipo de finanzas que trabajan desde casa reportan que la VPN se desconecta cada 10 minutos aproximadamente, lo que interrumpe sus cierres contables.",
+    "estado": "en revisión",
+    "equipo": "TI",
+    "prioridad": "media",
+    "proveedor": null,
+    "historial": [
+      {
+        "fecha": "2026-09-10",
+        "nota": "Se recopilan bitácoras de la VPN."
+      },
+      {
+        "fecha": "2026-09-12",
+        "nota": "Se prueba un nuevo perfil de conexión."
+      }
+    ]
+  },
+  {
+    "id": "T-1050",
+    "asunto": "Cambio de datos bancarios de proveedor",
+    "descripcion": "El proveedor de servicios de limpieza envió por correo una solicitud para cambiar la cuenta bancaria donde recibe pagos. Hay que validar la solicitud antes de aplicar el cambio.",
+    "estado": "esperando proveedor",
+    "equipo": "Compras",
+    "prioridad": "media",
+    "proveedor": "Limpieza Integral",
+    "historial": [
+      {
+        "fecha": "2026-09-11",
+        "nota": "Se pide al proveedor confirmar el cambio por teléfono."
+      },
+      {
+        "fecha": "2026-09-13",
+        "nota": "Pendiente carta firmada del proveedor."
+      }
+    ]
+  }
+]
