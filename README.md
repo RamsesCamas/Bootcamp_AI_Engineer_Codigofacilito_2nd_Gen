@@ -6,6 +6,7 @@ El Agente Operador es un asistente para el equipo de operaciones de una empresa 
 
 - **Clase 1:** el núcleo (`core/`): un cliente LLM que habla con varios proveedores mediante el patrón adaptador, con reintentos, fallback, costo por llamada y logging estructurado.
 - **Clase 2:** prompts versionados (`prompting/`, `prompts/`), contexto con presupuesto de tokens (`context/`) y pruebas de prompt injection.
+- **Clase 3:** salida estructurada con contratos Pydantic y reparación (`contracts/`), y el primer tool call (`tools/`).
 
 ## Qué se construye en cada bloque
 
@@ -53,13 +54,17 @@ uv run main.py --demo
 
 # Fuerza un proveedor, sin fallbacks
 uv run main.py --provider gemini "hola"
-uv run main.py --provider groq "hola"      # requiere el reto de la Clase 1
+uv run main.py --provider groq "hola"
 uv run main.py --provider ollama "hola"
 
 # Clasifica un ticket de data/*.jsonl con un prompt versionado (Clase 2)
 uv run main.py --prompt ticket_classifier --ticket T-1099                     # versión activa
 uv run main.py --prompt ticket_classifier --prompt-version 1 --ticket T-1099  # versión específica
 uv run main.py --prompt ticket_classifier "El ERP no abre desde la mañana"     # texto libre
+
+# Salida estructurada y herramientas (Clase 3)
+uv run main.py --structured --ticket T-1042
+uv run main.py --tools "¿Cómo va el T-1042?"
 ```
 
 Cada llamada imprime la respuesta y una línea gris con `proveedor · modelo · tokens in/out · latencia · costo`, y agrega una línea JSON por intento a `logs/llm_calls.jsonl`. Con `--prompt`, el log incluye `prompt_name` y `prompt_version`.
@@ -98,6 +103,8 @@ uv run ruff format --check .
 | `data/tickets_etiquetados.jsonl` | 20 tickets con su categoría (4 por categoría) para evaluar prompts |
 | `data/tickets_ataque.jsonl` | Tickets con prompt injection, incluido `T-1099` |
 | `prompts/ticket_classifier/examples.jsonl` | 10 ejemplos para few-shot (no se repiten con los de evaluación) |
+| `data/tickets_db.json` | 50 tickets (`T-1001` a `T-1050`) con estado, equipo, proveedor e historial; los lee `buscar_ticket` |
+| `data/proveedores.json` | 6 proveedores ficticios con servicio, SLA, estado y contacto (práctica de la Clase 3) |
 
 ## Arquitectura
 
@@ -126,6 +133,11 @@ flowchart LR
 | `core/pricing.py` | Precio por millón de tokens y costo por llamada |
 | `prompting/promptkit.py` | `PromptKit` y `Prompt`: carga YAML versionados y los renderiza con Jinja2 |
 | `context/manager.py` | `ContextManager`: arma el contexto respetando un presupuesto de tokens por sección |
+| `contracts/ticket.py` | `TicketClassification`: contrato de salida del triage |
+| `contracts/structured_output.py` | `generate_structured`: pide JSON, lo valida con Pydantic y repara |
+| `contracts/tool_schemas.py` | `ToolSpec` y `BUSCAR_TICKET`: qué recibe cada herramienta y cómo se describe |
+| `contracts/tool_loop.py` | `run_tool_loop` y `execute_tool`: el ciclo de herramientas con `MAX_ITERS` |
+| `tools/tickets.py` | `buscar_ticket` sobre `data/tickets_db.json` |
 
 ## Clase 2: prompt engineering y context engineering
 
@@ -157,15 +169,54 @@ user: |
 - `PromptKit().get("ticket_classifier")` devuelve la versión con `active: true`; `get("ticket_classifier", 1)` devuelve la v1 aunque no esté activa. Si hay cero o más de una activa, falla y dice qué archivos revisar.
 - Categorías válidas: `falla`, `solicitud`, `proveedor`, `facturacion`, `otro`.
 
+## Clase 3: salida estructurada, contratos y primer tool call
+
+- **Salida estructurada:** `generate_structured()` pide al modelo un JSON que cumpla un modelo Pydantic y lo valida localmente con `model_validate_json()`.
+- **Contrato `TicketClassification`** (`contracts/ticket.py`): `razon` va primero a propósito (el modelo justifica antes de decidir), `categoria` y `prioridad` son `Literal`, `resumen` tiene máximo 280 caracteres y un validador exige prioridad alta si hay una caída.
+- **Reparación:** si la respuesta no valida, se agrega al historial la respuesta cruda y el error en lenguaje claro, y se reintenta (máximo `max_repairs`). Un error del proveedor no se repara: se propaga.
+- **Primer tool call:** `buscar_ticket` (`tools/tickets.py`) con su contrato `ToolSpec` y el ciclo mínimo `run_tool_loop` (`contracts/tool_loop.py`): `for` con `MAX_ITERS = 3`, nunca `while True`. Los errores de herramientas se le regresan al modelo como `{"error": ...}`, sin traceback.
+
+### Capacidades por proveedor
+
+Verificado el 2026-10-09 en la documentación oficial. La estrategia de `generate_structured` depende del proveedor primario: `json_schema` estricto, si no `json_object` más el schema en el system, y si no solo el schema en el system.
+
+| Proveedor | `supports_tools` | `supports_json_schema` | `supports_json_object` | Documentación |
+|---|---|---|---|---|
+| Gemini | ✅ | ✅ | ❌ (no documentado) | [OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai), [Structured output](https://ai.google.dev/gemini-api/docs/structured-output) |
+| Groq (`openai/gpt-oss-*`) | ✅ (defaults de la clase base) | ✅ | ✅ | [Tool use](https://console.groq.com/docs/tool-use), [Structured outputs](https://console.groq.com/docs/structured-outputs) |
+| Ollama | ✅ | ❌ (no confirmado) | ✅ (JSON mode) | [OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) |
+
+Detalles que importan:
+
+- **Gemini 3** regresa cada tool call con `extra_content` (su *thought signature*). Hay que reenviarlo tal cual en el siguiente turno; si falta, responde 400. `ToolCall` lo guarda y `LLMResponse.as_message()` lo devuelve.
+- **Groq** con `strict: true` exige `additionalProperties: false` y que todas las propiedades estén en `required`. `openai/gpt-oss-120b` no soporta tool calls en paralelo y la página no menciona `tool_choice`.
+- **Ollama** no soporta `tool_choice`.
+- **Schema que se envía:** `sanitize_schema()` quita `maxLength`, `minLength`, `pattern`, `title` y `default`, y resuelve `$defs`. Solo cambia la copia que se manda; Pydantic sigue validando el modelo completo en local.
+
+### Comandos
+
+```bash
+# Triage con salida estructurada (imprime un TicketClassification en JSON)
+uv run main.py --structured --ticket T-1042
+
+# Pregunta con herramientas: muestra cada tool call (→) y su resultado (←)
+uv run main.py --tools "¿Cómo va el T-1042?"
+uv run main.py --tools "¿Cómo va el T-9999?"     # la herramienta regresa un error y el modelo lo explica
+```
+
+Cada llamada queda en `logs/llm_calls.jsonl` con `structured_schema` y `repair_attempt` (salida estructurada) o `tool_iteration` y `tool_calls` (solo los **nombres** de las herramientas pedidas, nunca sus argumentos).
+
 ## Retos
 
 ### Reto de la Clase 1: proveedor de respaldo y reporte
 
+La solución ya está publicada: `GroqProvider` en `core/providers.py` y `scripts/report.py`.
+
 | Paso | Qué hacer |
 |---|---|
-| 1 | Implementa `GroqProvider` en `core/providers.py` (busca `TODO(clase-1)`). Pista: mira `GeminiProvider`. Prueba con `uv run main.py --provider groq "hola"` |
+| 1 | Implementa `GroqProvider` en `core/providers.py`. Pista: mira `GeminiProvider`. Prueba con `uv run main.py --provider groq "hola"` |
 | 2 | Fuerza el fallback: `GEMINI_API_KEY=invalida uv run main.py "hola"`. Revisa en `logs/llm_calls.jsonl` el intento fallido y el `fallback: true` |
-| 3 | Completa `scripts/report.py` (busca `TODO(clase-1)`): costo total en USD, latencia p50 y p95 de las llamadas exitosas, % de llamadas con fallback y llamadas por proveedor. Solo librería estándar; maneja el caso de que el log no exista o esté vacío |
+| 3 | Completa `scripts/report.py`: costo total en USD, latencia p50 y p95 de las llamadas exitosas, % de llamadas con fallback y llamadas por proveedor. Solo librería estándar; maneja el caso de que el log no exista o esté vacío |
 | Bonus | Agrega `--temperature` (0–2) a `main.py` y pásalo al proveedor |
 
 ### Reto de la Clase 2: un clasificador v3 con few-shot
@@ -192,9 +243,21 @@ Opcional: migra el system prompt de `main.py` (busca `TODO(clase-2)`) a `prompts
 
 > Los resultados varían por modelo y entre corridas. Con 20 tickets, cada ticket vale 5 puntos porcentuales: no saques conclusiones de una diferencia de uno o dos tickets. Más ejemplos también significan más tokens: compara el costo, no solo los aciertos.
 
+### Práctica de la Clase 3: combinar dos herramientas
+
+1. Crea `ConsultarProveedorArgs` y su `ToolSpec` (`CONSULTAR_PROVEEDOR`) en `contracts/tool_schemas.py` (busca `TODO(clase-3)`), con una buena descripción: qué hace, cuándo usarla y cuándo **no**.
+2. Implementa `consultar_proveedor(nombre)` en `tools/` sobre `data/proveedores.json`.
+3. Registra la herramienta en `TOOLS` de `main.py`, junto a `BUSCAR_TICKET`.
+4. Logra que el modelo combine ambas herramientas:
+   ```bash
+   uv run main.py --tools "¿El T-1042 depende de algún proveedor? ¿Cuál es su SLA?"
+   ```
+   Está listo cuando `logs/llm_calls.jsonl` muestra las dos herramientas (`buscar_ticket` y `consultar_proveedor`) en la misma request.
+
 ## Avisos
 
 - Gemini se consume con su [endpoint oficial compatible con OpenAI](https://ai.google.dev/gemini-api/docs/openai), que Google marca como **beta**. Desde junio de 2026 Google recomienda su API nativa, la [Interactions API](https://ai.google.dev/gemini-api/docs/interactions-overview), para proyectos nuevos. Aquí usamos la compatible con OpenAI para que Gemini, Groq y Ollama compartan un mismo adaptador base. Cambiar a la API nativa solo requiere otro adaptador en `core/providers.py`; el resto del código no se toca.
 - En el free tier de Gemini, `compare_prompts.py` puede recibir errores 429 (límite por minuto). El script reintenta con esperas de hasta ~1 minuto; si un ticket aun así falla, se reporta como error del proveedor y no como fuera de formato.
+- El validador `caida_es_alta` de `TicketClassification` es una **simplificación didáctica**: busca la palabra "caíd" en el texto. Una regla real usaría un campo explícito.
 - Los precios en `core/pricing.py` son **ilustrativos**. Revisa la tabla vigente de cada proveedor antes de tomar decisiones con ellos.
 - **Nunca subas tu `.env`** al repositorio. Ya está en `.gitignore`; si alguna vez lo subes por error, rota tus llaves.
