@@ -118,21 +118,28 @@ def test_cli_consolida_y_guarda_la_sesion(tmp_path, monkeypatch, logger, fake_sl
     sesion.agregar("usuario", "Desde esta semana cubro la guardia N2 los jueves.")
     sesion.agregar("agente", "Anotado.")
     sesion.guardar(sesiones)
-    script = [hechos(("Cubre la guardia N2 los jueves.", "semantico"))]
+    saludo = Sesion("saludo")
+    saludo.agregar("usuario", "Hola.")
+    saludo.agregar("agente", "Hola, ¿en qué te ayudo?")
+    saludo.guardar(sesiones)
+    script = [hechos(("Cubre la guardia N2 los jueves.", "semantico")), hechos()]
     _, client = client_for(script, logger, fake_sleep)
     monkeypatch.setattr(scripts.memoria, "build_llm_client", lambda: client)
     base = ["--embedder", "fake", "--path", str(tmp_path / "memoria.json")]
 
-    assert (
-        scripts.memoria.main([*base, "consolidar", "--sesion", "demo", "--sesiones", str(sesiones)])
-        == 0
-    )
-    assert (
-        scripts.memoria.main([*base, "consolidar", "--sesion", "demo", "--sesiones", str(sesiones)])
-        == 0
-    )
+    def cli(sesion_id: str) -> int:
+        argv = [*base, "consolidar", "--sesion", sesion_id, "--sesiones", str(sesiones)]
+        return scripts.memoria.main(argv)
+
+    assert [cli("demo"), cli("demo"), cli("saludo"), cli("nadie")] == [0, 0, 0, 0]
 
     salida = capsys.readouterr().out.splitlines()
     assert salida[0].startswith("agregar r1: Cubre la guardia N2 los jueves.")
-    assert salida[1] == "La sesión demo no tiene turnos nuevos."
+    assert salida[1:] == [
+        "La sesión demo no tiene turnos nuevos.",
+        "Nada que recordar en 2 turnos nuevos.",  # hubo turnos, pero ningún hecho
+        "La sesión nadie no tiene turnos nuevos.",
+    ]
     assert Sesion.cargar("demo", sesiones).consolidados == 2
+    assert Sesion.cargar("saludo", sesiones).consolidados == 2
+    assert not (sesiones / "nadie.json").exists()  # no deja sesiones vacías

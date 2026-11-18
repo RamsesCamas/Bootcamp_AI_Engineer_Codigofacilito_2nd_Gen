@@ -8,6 +8,7 @@ import pytest
 import main
 import scripts.eval_router
 import scripts.memoria
+from core.errors import PermanentProviderError
 from core.llm_client import LLMClient
 from scripts.build_graph import main as build_main
 from scripts.eval_retrieval import ROOT, load_golden
@@ -94,6 +95,18 @@ def test_el_router_con_llm_se_mide_igual(
     assert "| llm | 3/3 | 1.00 | 3/3 |" in out
     assert "llm: 3 llamadas · 45 tokens · $0.000300" in out
     assert "| u1 | 0.0 | 0.0 | 1.0 | memoria | **busqueda** | memoria |" in out
+    assert "aviso:" not in out
+
+    # Sin LLM, decide la regla en las tres; la tabla lo dice en vez de esconderlo.
+    error = PermanentProviderError("gemini", "llave inválida", 401)
+    client = LLMClient([FakeProvider("gemini", [error] * 3)], logger, sleep=fake_sleep)
+    monkeypatch.setattr(scripts.eval_router, "build_llm_client", lambda: client)
+
+    assert router_main([*fuentes, "--golden", str(golden), "--llm"]) == 0
+
+    out = capsys.readouterr().out
+    assert "| llm | 1/3 | 0.50 | 1/3 |" in out
+    assert "aviso: en 3 de 3 preguntas falló el LLM y decidió la regla" in out
 
 
 def test_main_modo_auto_responde_con_la_memoria(

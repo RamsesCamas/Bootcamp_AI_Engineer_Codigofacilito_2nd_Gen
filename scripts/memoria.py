@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))  # Para importar los paquetes del repo al correr como script.
 
 from contracts.structured_output import StructuredOutputError  # noqa: E402
-from core.errors import AllProvidersFailedError  # noqa: E402
+from core.errors import AllProvidersFailedError, ProviderError  # noqa: E402
 from knowledge.embeddings import make_embedder  # noqa: E402
 from memory.consolidar import consolidar  # noqa: E402
 from memory.recuerdos import MEMORIA_PATH, Memoria, Recuerdo  # noqa: E402
@@ -70,7 +70,12 @@ def main(argv: list[str] | None = None) -> int:
     elif args.comando == "importar":
         print(importar(memoria, args.archivo))
     elif args.comando == "buscar":
-        for recuerdo, similitud in memoria.buscar(args.consulta, args.k):
+        try:
+            encontrados = memoria.buscar(args.consulta, args.k)
+        except ProviderError as e:  # sin red o sin cuota de embeddings
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        for recuerdo, similitud in encontrados:
             print(f"{similitud:.2f}  {linea(recuerdo)}")
     elif args.comando == "borrar":
         if args.id not in memoria.recuerdos:
@@ -80,12 +85,16 @@ def main(argv: list[str] | None = None) -> int:
     elif args.comando == "consolidar":
         try:
             sesion = Sesion.cargar(args.sesion, args.sesiones)
+            nuevos = len(sesion.turnos) - sesion.consolidados
             cambios = consolidar(build_llm_client(), memoria, sesion)
-        except (ValueError, AllProvidersFailedError, StructuredOutputError) as e:
+        except (ValueError, ProviderError, AllProvidersFailedError, StructuredOutputError) as e:
             print(f"Error: {e}", file=sys.stderr)  # lo ya aplicado queda; el resto, otra vez
             return 1
+        if not nuevos:
+            print(f"La sesión {args.sesion} no tiene turnos nuevos.")
+            return 0
         sesion.guardar(args.sesiones)
-        print("\n".join(cambios) or f"La sesión {args.sesion} no tiene turnos nuevos.")
+        print("\n".join(cambios) or f"Nada que recordar en {nuevos} turnos nuevos.")
     return 0
 
 

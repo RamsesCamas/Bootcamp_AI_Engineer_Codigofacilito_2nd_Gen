@@ -172,6 +172,11 @@ def main(argv: list[str] | None = None) -> int:
     salida = [titulo, "", format_table(golden, elegidas, recalls, args.k)]
     if router:
         salida += ["", f"llm: {uso.calls} llamadas · {uso.tokens:,} tokens · ${uso.cost_usd:.6f}"]
+        if router.respaldos:  # sin este aviso, la fila llm mezclaría la regla sin decirlo
+            salida.append(
+                f"aviso: en {router.respaldos} de {len(golden)} preguntas falló el LLM y decidió "
+                "la regla; la fila llm no es solo del LLM."
+            )
     if args.detalle:
         salida += ["", format_detail(golden, elegidas, recalls)]
     texto = "\n".join(salida)

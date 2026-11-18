@@ -95,6 +95,7 @@ def test_si_el_llm_falla_decide_la_regla(logger, fake_sleep):
     # La regla diría memoria, pero esta vez no hay memoria: búsqueda.
     assert (router.ruta.fuente, router.decidio) == ("busqueda", "regla")
     assert router.ruta.motivo == "Habla en primera persona. No hay memoria."
+    assert router.respaldos == 1
     assert fuentes["busqueda"].consultas == ["¿Qué me falta para cerrar el T-1022?"]
 
 

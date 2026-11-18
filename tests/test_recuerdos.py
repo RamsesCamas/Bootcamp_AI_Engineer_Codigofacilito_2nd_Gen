@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import scripts.memoria
+from core.errors import TransientProviderError
 from knowledge.embeddings import FakeEmbedder
 from memory.recuerdos import Memoria
 from scripts.memoria import ROOT
@@ -65,7 +67,14 @@ def test_memoria_vacia(tmp_path):
     assert memoria(tmp_path).buscar("¿A quién escalé el T-1043?") == []
 
 
-def test_cli_importa_una_vez_y_busca(tmp_path, capsys):
+class SinCuota(FakeEmbedder):
+    """Como Gemini cuando se acaba la cuota de embeddings."""
+
+    def embed_query(self, pregunta: str) -> list[float]:
+        raise TransientProviderError("gemini", "cuota de embeddings agotada", 429)
+
+
+def test_cli_importa_una_vez_y_busca(tmp_path, monkeypatch, capsys):
     base = ["--embedder", "fake", "--path", str(tmp_path / "memoria.json")]
     demo = str(ROOT / "data" / "memorias_demo.jsonl")
 
@@ -80,3 +89,8 @@ def test_cli_importa_una_vez_y_busca(tmp_path, capsys):
     assert salida[2].endswith(
         "r8 · episodico · 2026-11-17  Va a cerrar el T-1022 cuando se cancele el pedido duplicado."
     )
+
+    # Sin cuota de embeddings: un error de una línea, no un traceback.
+    monkeypatch.setattr(scripts.memoria, "make_embedder", lambda nombre: SinCuota())
+    assert memoria_main([*base, "buscar", "¿A quién escalé el T-1043?"]) == 1
+    assert capsys.readouterr().err == "Error: [gemini] (HTTP 429) cuota de embeddings agotada\n"

@@ -94,6 +94,7 @@ class Router:
         self.client = client
         self.ruta: Ruta | None = None  # la última ruta elegida
         self.decidio = ""  # "llm" o "regla"
+        self.respaldos = 0  # cuántas veces falló el LLM y decidió la regla
 
     def elegir(self, pregunta: str) -> Ruta:
         if self.client is not None:
@@ -102,7 +103,7 @@ class Router:
                 self.decidio = "llm"
                 return ruta
             except (AllProvidersFailedError, StructuredOutputError):
-                pass  # decide la regla
+                self.respaldos += 1  # decide la regla
         self.decidio = "regla"
         ruta = por_reglas(pregunta)
         if ruta.fuente not in self.fuentes:
