@@ -136,6 +136,9 @@ uv run scripts/eval_multihop.py --modos vector hibrida hibrida+rerank --report r
 uv run scripts/build_graph.py
 uv run scripts/build_graph.py --llm --comunidades
 uv run scripts/eval_multihop.py --modos hibrida grafo hibrida+grafo --detalle
+
+# ¿Búsqueda o grafo? Una regla contra usar siempre una fuente (reto de la Clase 8)
+uv run scripts/eval_router.py --detalle --report reports/router.md
 ```
 
 `compare_prompts.py` usa un solo proveedor sin fallback (el primario o el de `--provider`). `main.py --prompt` usa solo el primario si la cadena de fallbacks no se puede armar (por ejemplo, mientras `GroqProvider` esté pendiente).
@@ -161,6 +164,7 @@ uv run ruff format --check .
 | `data/docs/` | 12 documentos ficticios de Acme Operaciones: 3 runbooks, 3 políticas, 3 contratos en PDF y 3 FAQ (Clase 6) |
 | `data/golden/rag_v1.jsonl` | 10 preguntas con su fuente esperada y 1 fuera del corpus, para `eval_retrieval.py` |
 | `data/golden/multihop_v1.jsonl` | 6 preguntas que necesitan 2 documentos, con sus `fuentes_esperadas`, para `eval_multihop.py` |
+| `data/golden/router_v1.jsonl` | Las 20 preguntas con fuente de `rag_v3` y las 6 de `multihop_v1`, con su `fuente_preferida` (`busqueda` o `grafo`), para `eval_router.py` |
 
 ## Arquitectura
 
