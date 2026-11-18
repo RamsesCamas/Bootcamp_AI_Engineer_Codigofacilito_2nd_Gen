@@ -21,6 +21,7 @@ Uso:
     uv run main.py --agent react --docs "El T-1042 lleva 6 horas sin respuesta: ¿escalo?"
     uv run main.py --rag "¿Qué penalización tiene el proveedor del T-1042?" --modo grafo
     uv run main.py --agent react --docs --grafo "El T-1043 lleva 3 horas: ¿ya incumplió?"
+    uv run main.py --agent react --sesion demo "¿Cómo va el T-1042?"
 """
 
 from __future__ import annotations
@@ -194,9 +195,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Con --agent, agrega consultar_grafo: relaciones de var/grafo.json (Clase 8).",
     )
+    parser.add_argument(
+        "--sesion",
+        metavar="ID",
+        help="Con --agent react, guarda la conversación en var/sesiones/ID.json y la usa como "
+        "historial del siguiente turno (Clase 9).",
+    )
     args = parser.parse_args(argv)
     if args.rag is not None:
-        others = (args.prompt, args.ticket, args.agent, args.prompt_name, args.demo)
+        others = (args.prompt, args.ticket, args.agent, args.prompt_name, args.demo, args.sesion)
         if any(others) or args.structured or args.tools or args.docs or args.grafo:
             parser.error("--rag recibe la pregunta y no se combina con otros modos.")
         return args
@@ -210,6 +217,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--docs y --grafo requieren --agent y no se combinan con --mcp.")
     if args.verify and not args.agent:
         parser.error("--verify requiere --agent.")
+    if args.sesion and args.agent != "react":
+        parser.error("--sesion requiere --agent react.")
     if args.mcp and not args.agent:
         parser.error("--mcp requiere --agent.")
     if args.agent and (args.structured or args.tools or args.prompt_name or args.demo):
@@ -311,6 +320,7 @@ def run_agent(
     docs: bool = False,
     embedder: str | None = None,
     grafo: bool = False,
+    sesion: str | None = None,
 ) -> int:
     from agents import PlanAndExecute, ReActAgent, verify_and_revise
     from agents.tools import ToolRunner
@@ -339,13 +349,32 @@ def run_agent(
             print(f"{GRAY}    ← {json.dumps(data['observacion'], ensure_ascii=False)}{RESET}")
 
     agent_cls = ReActAgent if kind == "react" else PlanAndExecute
+    run_kwargs: dict = {}
+    if sesion:
+        # Clase 9: la conversación previa entra al prompt; lo más viejo, resumido.
+        from memory.session import Sesion
+
+        try:
+            conversacion = Sesion.cargar(sesion)
+        except ValueError as e:
+            return fail(str(e))
+        try:
+            resumidos = conversacion.compactar(client)
+        except AllProvidersFailedError:
+            resumidos = 0
+            print(f"{GRAY}Aviso: no se pudo resumir la sesión; va completa{RESET}", file=sys.stderr)
+        nota = f" · {resumidos} turnos pasaron al resumen" if resumidos else ""
+        print(f"{GRAY}sesión {sesion}: {len(conversacion.turnos)} turnos{nota}{RESET}")
+        run_kwargs["historial"] = conversacion.historial()
     if mcp:
         # El server MCP aplica su propio ToolRunner con OPERADOR_ROL.
         from operador_mcp.client import MCPToolset
 
         with MCPToolset(rol=rol) as toolset:
             print(f"{GRAY}herramientas: MCP por stdio · rol {rol}{RESET}")
-            result = agent_cls(client, toolset.tools(), on_event=on_event).run(question)
+            result = agent_cls(client, toolset.tools(), on_event=on_event).run(
+                question, **run_kwargs
+            )
     else:
         # El agente puede proponer actualizar_estado; el ToolRunner decide según el rol.
         extras = [ACTUALIZAR_ESTADO, LISTAR_TICKETS_POR_PROVEEDOR, CREAR_TICKET]
@@ -372,7 +401,9 @@ def run_agent(
         runner = ToolRunner(tools, rol=rol, log_path=TOOL_LOG_PATH)
         extras = (" + documentos" if docs else "") + (" + grafo" if grafo else "")
         print(f"{GRAY}herramientas: locales{extras} · rol {rol}{RESET}")
-        result = agent_cls(client, tools, on_event=on_event, runner=runner).run(question)
+        result = agent_cls(client, tools, on_event=on_event, runner=runner).run(
+            question, **run_kwargs
+        )
     respuesta, checked = result.respuesta, None
     llamadas, tokens, cost_usd = result.llamadas, result.tokens, result.cost_usd
     if verify and respuesta:
@@ -382,6 +413,11 @@ def run_agent(
         llamadas += extra.calls
         tokens += extra.tokens
         cost_usd += extra.cost_usd
+
+    if sesion and respuesta:
+        conversacion.agregar("usuario", question)
+        conversacion.agregar("agente", respuesta.strip())
+        conversacion.guardar()
 
     if actions:
         print("   ".join(actions))
@@ -573,6 +609,7 @@ def main(argv: list[str] | None = None) -> int:
             docs=args.docs,
             embedder=args.embedder,
             grafo=args.grafo,
+            sesion=args.sesion,
         )
 
     if args.structured or args.tools:
