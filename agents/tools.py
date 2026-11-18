@@ -56,6 +56,8 @@ POLITICAS: dict[str, ToolPolicy] = {
     "consultar_grafo": ToolPolicy("lectura", timeout_s=2),
     # Clase 9: embedding de la consulta (y de los recuerdos que no estén en la caché).
     "consultar_memoria": ToolPolicy("lectura", timeout_s=30),
+    # Práctica guiada de la Clase 9: el mismo texto no se duplica, así que reintentar es seguro.
+    "guardar_recuerdo": ToolPolicy("escritura", idempotente=True),
 }
 ROLES: dict[Rol, set[Permiso]] = {"lectura": {"lectura"}, "operador": {"lectura", "escritura"}}
 

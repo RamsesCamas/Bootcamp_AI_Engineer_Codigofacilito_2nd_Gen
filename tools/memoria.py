@@ -31,10 +31,11 @@ def consultar_memoria(args: ConsultarMemoriaArgs, *, memoria: Memoria) -> dict:
 
 def guardar_recuerdo(args: GuardarRecuerdoArgs, *, memoria: Memoria) -> dict:
     """Escribe en el camino de la respuesta: lo que el usuario pidió recordar, al momento."""
-    # TODO(clase-9): práctica guiada. Si ya hay un recuerdo con el mismo texto, regresa
-    # {"id": su id, "nota": "Ya estaba en la memoria."}; si no, agrégalo con
-    # memoria.agregar y regresa {"id": el id nuevo, "guardado": el texto}.
-    raise NotImplementedError
+    for recuerdo in memoria.recuerdos.values():
+        if recuerdo.texto == args.texto:  # el mismo texto no se duplica: se puede reintentar
+            return {"id": recuerdo.id, "nota": "Ya estaba en la memoria."}
+    recuerdo = memoria.agregar(args.texto, args.tipo)
+    return {"id": recuerdo.id, "guardado": recuerdo.texto}
 
 
 def consultar_memoria_tool(memoria: Memoria) -> ToolSpec:
@@ -51,4 +52,18 @@ def consultar_memoria_tool(memoria: Memoria) -> ToolSpec:
         ),
         args_model=ConsultarMemoriaArgs,
         handler=partial(consultar_memoria, memoria=memoria),
+    )
+
+
+def guardar_recuerdo_tool(memoria: Memoria) -> ToolSpec:
+    """Práctica guiada de la Clase 9: escribir en la memoria sin esperar a `consolidar`."""
+    return ToolSpec(
+        name="guardar_recuerdo",
+        description=(
+            "Guarda un recuerdo de largo plazo. Úsala solo cuando el usuario te pide que "
+            "recuerdes algo («recuerda que…», «anota que…»); lo demás de la sesión lo guarda "
+            "la consolidación. Escribe una oración en tercera persona con lo que pidió."
+        ),
+        args_model=GuardarRecuerdoArgs,
+        handler=partial(guardar_recuerdo, memoria=memoria),
     )

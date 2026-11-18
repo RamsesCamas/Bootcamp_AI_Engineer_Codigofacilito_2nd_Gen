@@ -413,14 +413,15 @@ def run_agent(
             # Clase 9: lo que el usuario contó en otras sesiones.
             from knowledge.embeddings import make_embedder
             from memory.recuerdos import MEMORIA_PATH, Memoria
-            from tools.memoria import consultar_memoria_tool
+            from tools.memoria import consultar_memoria_tool, guardar_recuerdo_tool
 
             if not MEMORIA_PATH.exists():
                 return fail(
                     f"no hay memoria en {MEMORIA_PATH}; corre `uv run scripts/memoria.py "
                     "importar data/memorias_demo.jsonl` o consolida una sesión."
                 )
-            tools.append(consultar_memoria_tool(Memoria(make_embedder(embedder or "gemini"))))
+            recuerdos = Memoria(make_embedder(embedder or "gemini"))
+            tools += [consultar_memoria_tool(recuerdos), guardar_recuerdo_tool(recuerdos)]
         runner = ToolRunner(tools, rol=rol, log_path=TOOL_LOG_PATH)
         extras = (" + documentos" if docs else "") + (" + grafo" if grafo else "")
         extras += " + memoria" if memoria else ""

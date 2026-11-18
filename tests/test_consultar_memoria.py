@@ -14,7 +14,7 @@ from memory.recuerdos import Memoria
 from scripts.memoria import ROOT, importar
 from tests.agent_helpers import answer, reply, use_tool
 from tests.conftest import FakeProvider
-from tools.memoria import consultar_memoria_tool
+from tools.memoria import consultar_memoria_tool, guardar_recuerdo_tool
 
 
 @pytest.fixture
@@ -26,9 +26,13 @@ def memoria(tmp_path) -> Memoria:
     return memoria
 
 
-def run(runner: ToolRunner, arguments: dict) -> dict:
-    message = runner.execute(ToolCall("paso-1", "consultar_memoria", json.dumps(arguments)))
+def run_tool(runner: ToolRunner, name: str, arguments: dict) -> dict:
+    message = runner.execute(ToolCall("paso-1", name, json.dumps(arguments)))
     return json.loads(message["content"])
+
+
+def run(runner: ToolRunner, arguments: dict) -> dict:
+    return run_tool(runner, "consultar_memoria", arguments)
 
 
 def test_trae_los_recuerdos_mas_parecidos_con_su_fuente(memoria):
@@ -50,6 +54,42 @@ def test_con_la_memoria_vacia_lo_dice(tmp_path):
         "recuerdos": [],
         "nota": "La memoria está vacía.",
     }
+
+
+GUARDIA = {"texto": "Cubre la guardia N2 los jueves.", "tipo": "semantico"}
+
+
+def test_guardar_recuerdo_regresa_el_id_nuevo(memoria):
+    runner = ToolRunner([guardar_recuerdo_tool(memoria)], rol="operador")
+
+    salida = run_tool(runner, "guardar_recuerdo", GUARDIA)
+
+    assert salida == {"id": "r9", "guardado": "Cubre la guardia N2 los jueves."}
+    assert memoria.recuerdos["r9"].texto == "Cubre la guardia N2 los jueves."
+    assert runner.eventos[-1]["tool_permiso"] == "escritura"
+
+
+def test_el_mismo_texto_no_se_duplica(memoria):
+    runner = ToolRunner([guardar_recuerdo_tool(memoria)], rol="operador")
+    run_tool(runner, "guardar_recuerdo", GUARDIA)
+
+    segunda = run_tool(runner, "guardar_recuerdo", GUARDIA)
+
+    assert segunda == {"id": "r9", "nota": "Ya estaba en la memoria."}
+    assert len(memoria.recuerdos) == 9
+
+
+def test_con_el_rol_lectura_no_se_guarda(memoria):
+    runner = ToolRunner([guardar_recuerdo_tool(memoria)], rol="lectura")
+
+    salida = run_tool(
+        runner,
+        "guardar_recuerdo",
+        {"texto": "Prefiere respuestas cortas.", "tipo": "procedimental"},
+    )
+
+    assert salida["error"]["tipo"] == "permiso"
+    assert len(memoria.recuerdos) == 8
 
 
 def test_el_agente_responde_con_lo_que_recuerda(memoria, logger, fake_sleep):
