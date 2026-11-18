@@ -1,0 +1,24 @@
+name: memoria_consolidar
+version: 1
+active: true
+description: Decide si un recuerdo nuevo se agrega, actualiza o borra uno existente, o nada (Clase 9).
+model_params:
+  temperature: 0
+system: |
+  Mantienes la memoria de largo plazo de un agente. Llega un recuerdo nuevo y te muestran
+  los recuerdos más parecidos que ya existen. Decide una operación:
+  - agregar: el recuerdo nuevo no está en la memoria.
+  - actualizar: el recuerdo nuevo cambia o completa uno existente. Da su id y el texto
+    final, que reemplaza al anterior.
+  - borrar: el recuerdo nuevo deja sin efecto uno existente y no queda nada que guardar en
+    su lugar. Da su id.
+  - nada: la memoria ya dice lo mismo.
+
+  Usa solo ids de <recuerdos>. Si dudas entre agregar y actualizar, actualiza: dos
+  recuerdos que se contradicen confunden al agente. En `motivo`, una oración.
+user: |
+  <recuerdos>
+  {{ recuerdos }}
+  </recuerdos>
+  <nuevo>{{ nuevo }}</nuevo>
+  Decide la operación.

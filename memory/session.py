@@ -42,6 +42,7 @@ class Sesion:
     turnos: list[Turno] = field(default_factory=list)
     resumen: str = ""
     resumidos: int = 0  # los primeros `resumidos` turnos ya están dentro del resumen
+    consolidados: int = 0  # y los primeros `consolidados`, en la memoria de largo plazo
 
     def __post_init__(self) -> None:
         if not _ID.match(self.id):

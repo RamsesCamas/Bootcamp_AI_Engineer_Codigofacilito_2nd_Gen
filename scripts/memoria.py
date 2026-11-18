@@ -4,9 +4,11 @@
     uv run scripts/memoria.py listar
     uv run scripts/memoria.py buscar "¿A quién escalé el T-1043?"
     uv run scripts/memoria.py borrar r4
+    uv run scripts/memoria.py consolidar --sesion demo
 
 Los recuerdos viven en var/memoria.json. `buscar` usa el embedder del RAG (Gemini con la
-caché de .cache/, o `--embedder fake` sin red).
+caché de .cache/, o `--embedder fake` sin red). `consolidar` pasa a la memoria lo nuevo de
+una sesión de `main.py --sesion`: extrae hechos con el LLM y decide qué hacer con cada uno.
 """
 
 from __future__ import annotations
@@ -19,8 +21,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))  # Para importar los paquetes del repo al correr como script.
 
+from contracts.structured_output import StructuredOutputError  # noqa: E402
+from core.errors import AllProvidersFailedError  # noqa: E402
 from knowledge.embeddings import make_embedder  # noqa: E402
+from memory.consolidar import consolidar  # noqa: E402
 from memory.recuerdos import MEMORIA_PATH, Memoria, Recuerdo  # noqa: E402
+from memory.session import SESIONES_PATH, Sesion  # noqa: E402
+from scripts.eval_retrieval import build_llm_client  # noqa: E402
 
 
 def linea(recuerdo: Recuerdo) -> str:
@@ -52,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--k", type=int, default=3)
     p = sub.add_parser("borrar", help="Borra un recuerdo por id.")
     p.add_argument("id")
+    p = sub.add_parser("consolidar", help="Pasa a la memoria lo nuevo de una sesión.")
+    p.add_argument("--sesion", required=True, metavar="ID")
+    p.add_argument("--sesiones", type=Path, default=SESIONES_PATH, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     memoria = Memoria(make_embedder(args.embedder), path=args.path)
@@ -67,6 +77,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: no existe el recuerdo {args.id}.", file=sys.stderr)
             return 1
         print(f"Borrado: {linea(memoria.borrar(args.id))}")
+    elif args.comando == "consolidar":
+        try:
+            sesion = Sesion.cargar(args.sesion, args.sesiones)
+            cambios = consolidar(build_llm_client(), memoria, sesion)
+        except (ValueError, AllProvidersFailedError, StructuredOutputError) as e:
+            print(f"Error: {e}", file=sys.stderr)  # lo ya aplicado queda; el resto, otra vez
+            return 1
+        sesion.guardar(args.sesiones)
+        print("\n".join(cambios) or f"La sesión {args.sesion} no tiene turnos nuevos.")
     return 0
 
 
