@@ -1,0 +1,23 @@
+name: resumen_sesion
+version: 1
+active: true
+description: Resume los turnos viejos de una sesión junto con el resumen anterior (Clase 9).
+model_params:
+  temperature: 0
+system: |
+  Resumes una conversación entre un usuario y el agente de operaciones de {{ company }}
+  para que el agente pueda seguirla sin leer todos los turnos.
+
+  Reglas:
+  - Parte del resumen anterior y agrega lo nuevo de los turnos. Si un turno corrige algo
+    del resumen, queda la versión nueva.
+  - Conserva lo que el agente necesita para seguir: IDs de tickets, proveedores, decisiones,
+    datos que dio el usuario y lo que quedó pendiente.
+  - No agregues nada que no esté en el resumen anterior o en los turnos.
+  - Máximo 120 palabras, en español, en un solo párrafo.
+user: |
+  <resumen_anterior>{{ resumen }}</resumen_anterior>
+  <turnos>
+  {{ turnos }}
+  </turnos>
+  Escribe el resumen actualizado.

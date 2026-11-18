@@ -1,47 +1,123 @@
 from __future__ import annotations
 
+import json
+import shutil
+
+import pytest
+
+import main
+import scripts.eval_router
+import scripts.memoria
+from core.llm_client import LLMClient
 from scripts.build_graph import main as build_main
 from scripts.eval_retrieval import ROOT, load_golden
-from scripts.eval_router import DEFAULT_GOLDEN, FUENTES, elegir_fuente
+from scripts.eval_router import DEFAULT_GOLDEN, FUENTES, MEMORIAS_DEMO
 from scripts.eval_router import main as router_main
 from scripts.ingest_docs import main as ingest_main
+from tests.conftest import FakeProvider, make_response
 
 
-def test_the_rule_needs_a_ticket_and_its_provider_or_contract():
-    assert (
-        elegir_fuente("¿Qué penalización aplica si el proveedor del T-1042 no cumple?") == "grafo"
-    )
-    assert elegir_fuente("El T-1043 lleva 3 horas, ¿ya incumplió su contrato?") == "grafo"
-    assert elegir_fuente("¿Qué pasó con el T-1016?") == "busqueda"
-    assert elegir_fuente("¿Cuál es el tiempo de respuesta de PagosRed según su contrato?") == (
-        "busqueda"
-    )
+@pytest.fixture(scope="module")
+def carpeta(tmp_path_factory):
+    """Índice con el embedder falso y grafo de reglas, una vez para todo el módulo."""
+    carpeta = tmp_path_factory.mktemp("router")
+    store = str(carpeta / "chroma")
+    assert ingest_main([str(ROOT / "data" / "docs"), "--embedder", "fake", "--store", store]) == 0
+    assert build_main(["--out", str(carpeta / "grafo.json")]) == 0
+    return carpeta
 
 
-def test_the_golden_set_joins_rag_v3_and_multihop():
+@pytest.fixture
+def fuentes(carpeta) -> list[str]:
+    """Los argumentos de eval_router para usar ese índice y ese grafo."""
+    store, grafo = str(carpeta / "chroma"), str(carpeta / "grafo.json")
+    return ["--embedder", "fake", "--store", store, "--grafo", grafo, "--busqueda", "bm25"]
+
+
+def test_router_v2_suma_parafrasis_y_preguntas_de_memoria():
     golden = load_golden(DEFAULT_GOLDEN)
-    assert len(golden) == 26
-    assert len({q["id"] for q in golden}) == 26
-    assert {q["fuente_preferida"] for q in golden} <= set(FUENTES)
-    assert [q["id"] for q in golden if q["fuente_preferida"] == "grafo"] == ["m1", "m2", "m4"]
+    memorias = len(MEMORIAS_DEMO.read_text(encoding="utf-8").splitlines())
+
+    assert len(golden) == len({q["id"] for q in golden}) == 38
+    assert {q["fuente_preferida"] for q in golden} == set(FUENTES)
+    grafo = [q["id"] for q in golden if q["fuente_preferida"] == "grafo"]
+    assert grafo == ["m1", "m2", "m4", "p1", "p2", "p3", "p4"]
+    assert [q["id"] for q in golden if q["fuente_preferida"] == "memoria"] == [
+        f"u{n}" for n in range(1, 9)
+    ]
     for q in golden:
         for fuente in q["fuentes_esperadas"]:
-            assert (ROOT / "data" / "docs" / fuente).exists(), fuente
+            if fuente.startswith("memoria/r"):
+                assert 1 <= int(fuente.removeprefix("memoria/r")) <= memorias
+            else:
+                assert (ROOT / "data" / "docs" / fuente).exists(), fuente
 
 
-def test_compares_the_rule_with_always_one_source(tmp_path, capsys):
-    store = str(tmp_path / "chroma")
-    assert ingest_main([str(ROOT / "data" / "docs"), "--embedder", "fake", "--store", store]) == 0
-    grafo = tmp_path / "grafo.json"
-    assert build_main(["--out", str(grafo)]) == 0
+def test_compara_la_regla_con_una_sola_fuente(fuentes, tmp_path, capsys):
     capsys.readouterr()
-
     report = tmp_path / "reports" / "router.md"
-    args = ["--embedder", "fake", "--store", store, "--grafo", str(grafo), "--busqueda", "bm25"]
-    assert router_main([*args, "--report", str(report)]) == 0
+
+    assert router_main([*fuentes, "--report", str(report)]) == 0
 
     out = capsys.readouterr().out
-    assert "| siempre busqueda | 23/26 | 0.94 | 23/26 |" in out
-    assert "| siempre grafo | 3/26 | 0.58 | 15/26 |" in out
-    assert "| regla | 25/26 | 1.00 | 26/26 |" in out
-    assert "- m5: eligió grafo" in report.read_text(encoding="utf-8")
+    assert "| siempre busqueda | 23/38 | 0.70 | 23/38 |" in out
+    assert "| siempre grafo | 7/38 | 0.50 | 19/38 |" in out
+    assert "| regla | 25/38 | 0.74 | 26/38 |" in out
+    assert "| etiqueta | 38/38 | 1.00 | 38/38 |" in out
+    texto = report.read_text(encoding="utf-8")
+    assert "## Dónde falla: regla" in texto
+    assert "- q09: eligió memoria y la etiqueta dice busqueda" in texto
+    assert "- u1: eligió busqueda y la etiqueta dice memoria" in texto
+
+
+def test_el_router_con_llm_se_mide_igual(
+    fuentes, tmp_path, monkeypatch, logger, fake_sleep, capsys
+):
+    golden = tmp_path / "router_mini.jsonl"
+    lineas = DEFAULT_GOLDEN.read_text(encoding="utf-8").splitlines()
+    golden.write_text(
+        "\n".join(x for x in lineas if json.loads(x)["id"] in ("q01", "p1", "u1")) + "\n",
+        encoding="utf-8",
+    )
+    respuestas = [
+        make_response("gemini", json.dumps({"motivo": "Prueba.", "fuente": fuente}))
+        for fuente in ("busqueda", "grafo", "memoria")
+    ]
+    client = LLMClient([FakeProvider("gemini", respuestas)], logger, sleep=fake_sleep)
+    monkeypatch.setattr(scripts.eval_router, "build_llm_client", lambda: client)
+    capsys.readouterr()
+
+    assert router_main([*fuentes, "--golden", str(golden), "--llm", "--detalle"]) == 0
+
+    out = capsys.readouterr().out
+    assert "| regla | 1/3 | 0.50 | 1/3 |" in out
+    assert "| llm | 3/3 | 1.00 | 3/3 |" in out
+    assert "llm: 3 llamadas · 45 tokens · $0.000300" in out
+    assert "| u1 | 0.0 | 0.0 | 1.0 | memoria | **busqueda** | memoria |" in out
+
+
+def test_main_modo_auto_responde_con_la_memoria(
+    carpeta, tmp_path, monkeypatch, logger, fake_sleep, capsys
+):
+    # main.py lee .chroma/, var/grafo.json y var/memoria.json desde la carpeta actual.
+    shutil.copytree(carpeta / "chroma", tmp_path / ".chroma")
+    (tmp_path / "var").mkdir()
+    shutil.copy(carpeta / "grafo.json", tmp_path / "var" / "grafo.json")
+    monkeypatch.chdir(tmp_path)
+    assert scripts.memoria.main(["--embedder", "fake", "importar", str(MEMORIAS_DEMO)]) == 0
+    respuestas = [
+        json.dumps({"motivo": "Pregunta por algo que hizo el usuario.", "fuente": "memoria"}),
+        json.dumps({"encontrado": True, "respuesta": "A Guardia N2 [1].", "citas": [1]}),
+    ]
+    provider = FakeProvider("gemini", [make_response("gemini", r) for r in respuestas])
+    client = LLMClient([provider], logger, sleep=fake_sleep)
+    monkeypatch.setattr(main, "build_client", lambda args: client)
+    capsys.readouterr()
+
+    pregunta = "¿A quién escalé el T-1043?"
+    assert main.main(["--rag", pregunta, "--modo", "auto", "--embedder", "fake"]) == 0
+
+    out = capsys.readouterr().out
+    assert "[1] memoria/r3" in out
+    assert "ruta: memoria (decidió llm)" in out
+    assert "fuentes: busqueda, grafo, memoria" in out

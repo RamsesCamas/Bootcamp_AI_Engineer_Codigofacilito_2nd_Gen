@@ -1,6 +1,6 @@
 name: react_agent
 version: 1
-active: true
+active: false
 description: Agente ReAct de operaciones; un paso estructurado (AgentStep) por llamada.
 model_params:
   temperature: 0

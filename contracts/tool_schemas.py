@@ -110,6 +110,29 @@ class BuscarDocumentosArgs(BaseModel):
     )
 
 
+class ConsultarMemoriaArgs(BaseModel):
+    consulta: str = Field(
+        min_length=3,
+        description=(
+            "Qué recordar, con las palabras del usuario: un ticket, un acuerdo, una preferencia"
+        ),
+    )
+
+
+class GuardarRecuerdoArgs(BaseModel):
+    texto: str = Field(
+        min_length=5,
+        max_length=200,
+        description="Una oración en tercera persona: «Cubre la guardia N2 los jueves.»",
+    )
+    tipo: Literal["semantico", "episodico", "procedimental"] = Field(
+        description=(
+            "semantico: un hecho del usuario o su trabajo; episodico: algo que hizo o dejó "
+            "pendiente; procedimental: cómo quiere que respondas"
+        )
+    )
+
+
 class ConsultarGrafoArgs(BaseModel):
     entidad: str = Field(
         min_length=2,

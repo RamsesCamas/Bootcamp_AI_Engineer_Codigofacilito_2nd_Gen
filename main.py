@@ -21,6 +21,9 @@ Uso:
     uv run main.py --agent react --docs "El T-1042 lleva 6 horas sin respuesta: ¿escalo?"
     uv run main.py --rag "¿Qué penalización tiene el proveedor del T-1042?" --modo grafo
     uv run main.py --agent react --docs --grafo "El T-1043 lleva 3 horas: ¿ya incumplió?"
+    uv run main.py --agent react --sesion demo "¿Cómo va el T-1042?"
+    uv run main.py --rag "¿A quién escalé el T-1043?" --modo auto
+    uv run main.py --agent react --memoria "¿Qué quedé de revisar con PagosRed?"
 """
 
 from __future__ import annotations
@@ -69,7 +72,7 @@ TOOL_LOG_PATH = Path(__file__).parent / "logs" / "tool_calls.jsonl"
 # Clase 6: RAG sobre data/docs, indexados con scripts/ingest_docs.py.
 RAG_K = 5
 # Clase 7: los modos de knowledge/retrieval.py (aquí sin importarlo: carga ChromaDB).
-RAG_MODOS = ("vector", "bm25", "hibrida", "grafo", "hibrida+grafo")
+RAG_MODOS = ("vector", "bm25", "hibrida", "grafo", "hibrida+grafo", "auto")
 
 # Herramientas disponibles en el modo --tools.
 TOOLS = [BUSCAR_TICKET, CONSULTAR_PROVEEDOR]
@@ -172,7 +175,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--modo",
         choices=RAG_MODOS,
         default="vector",
-        help="Con --rag, cómo buscar: vector (Clase 6), bm25 o hibrida (Clase 7), grafo (Clase 8).",
+        help="Con --rag, cómo buscar: vector (Clase 6), bm25 o hibrida (Clase 7), grafo "
+        "(Clase 8) o auto: el router elige búsqueda, grafo o memoria (Clase 9).",
     )
     parser.add_argument(
         "--reescribir",
@@ -194,22 +198,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Con --agent, agrega consultar_grafo: relaciones de var/grafo.json (Clase 8).",
     )
+    parser.add_argument(
+        "--memoria",
+        action="store_true",
+        help="Con --agent, agrega consultar_memoria: los recuerdos de var/memoria.json (Clase 9).",
+    )
+    parser.add_argument(
+        "--sesion",
+        metavar="ID",
+        help="Con --agent react, guarda la conversación en var/sesiones/ID.json y la usa como "
+        "historial del siguiente turno (Clase 9).",
+    )
     args = parser.parse_args(argv)
     if args.rag is not None:
-        others = (args.prompt, args.ticket, args.agent, args.prompt_name, args.demo)
-        if any(others) or args.structured or args.tools or args.docs or args.grafo:
+        others = (args.prompt, args.ticket, args.agent, args.prompt_name, args.demo, args.sesion)
+        if any(others) or args.structured or args.tools or args.docs or args.grafo or args.memoria:
             parser.error("--rag recibe la pregunta y no se combina con otros modos.")
+        if args.modo == "auto" and (args.reescribir or args.rerank):
+            parser.error("--modo auto no se combina con --reescribir ni --rerank.")
         return args
-    if args.k is not None or (args.embedder is not None and not args.docs):
-        parser.error("--k requiere --rag; --embedder requiere --rag o --docs.")
+    if args.k is not None or (args.embedder is not None and not (args.docs or args.memoria)):
+        parser.error("--k requiere --rag; --embedder requiere --rag, --docs o --memoria.")
     if args.tipo is not None or args.proveedor is not None:
         parser.error("--tipo y --proveedor requieren --rag.")
     if args.modo != "vector" or args.reescribir or args.rerank:
         parser.error("--modo, --reescribir y --rerank requieren --rag.")
-    if (args.docs or args.grafo) and (not args.agent or args.mcp):
-        parser.error("--docs y --grafo requieren --agent y no se combinan con --mcp.")
+    if (args.docs or args.grafo or args.memoria) and (not args.agent or args.mcp):
+        parser.error("--docs, --grafo y --memoria requieren --agent y no se combinan con --mcp.")
     if args.verify and not args.agent:
         parser.error("--verify requiere --agent.")
+    if args.sesion and args.agent != "react":
+        parser.error("--sesion requiere --agent react.")
     if args.mcp and not args.agent:
         parser.error("--mcp requiere --agent.")
     if args.agent and (args.structured or args.tools or args.prompt_name or args.demo):
@@ -311,6 +330,8 @@ def run_agent(
     docs: bool = False,
     embedder: str | None = None,
     grafo: bool = False,
+    sesion: str | None = None,
+    memoria: bool = False,
 ) -> int:
     from agents import PlanAndExecute, ReActAgent, verify_and_revise
     from agents.tools import ToolRunner
@@ -339,13 +360,32 @@ def run_agent(
             print(f"{GRAY}    ← {json.dumps(data['observacion'], ensure_ascii=False)}{RESET}")
 
     agent_cls = ReActAgent if kind == "react" else PlanAndExecute
+    run_kwargs: dict = {}
+    if sesion:
+        # Clase 9: la conversación previa entra al prompt; lo más viejo, resumido.
+        from memory.session import Sesion
+
+        try:
+            conversacion = Sesion.cargar(sesion)
+        except ValueError as e:
+            return fail(str(e))
+        try:
+            resumidos = conversacion.compactar(client)
+        except AllProvidersFailedError:
+            resumidos = 0
+            print(f"{GRAY}Aviso: no se pudo resumir la sesión; va completa{RESET}", file=sys.stderr)
+        nota = f" · {resumidos} turnos pasaron al resumen" if resumidos else ""
+        print(f"{GRAY}sesión {sesion}: {len(conversacion.turnos)} turnos{nota}{RESET}")
+        run_kwargs["historial"] = conversacion.historial()
     if mcp:
         # El server MCP aplica su propio ToolRunner con OPERADOR_ROL.
         from operador_mcp.client import MCPToolset
 
         with MCPToolset(rol=rol) as toolset:
             print(f"{GRAY}herramientas: MCP por stdio · rol {rol}{RESET}")
-            result = agent_cls(client, toolset.tools(), on_event=on_event).run(question)
+            result = agent_cls(client, toolset.tools(), on_event=on_event).run(
+                question, **run_kwargs
+            )
     else:
         # El agente puede proponer actualizar_estado; el ToolRunner decide según el rol.
         extras = [ACTUALIZAR_ESTADO, LISTAR_TICKETS_POR_PROVEEDOR, CREAR_TICKET]
@@ -369,10 +409,25 @@ def run_agent(
                 tools.append(consultar_grafo_tool(open_graph()))
             except LookupError as e:
                 return fail(str(e))
+        if memoria:
+            # Clase 9: lo que el usuario contó en otras sesiones.
+            from knowledge.embeddings import make_embedder
+            from memory.recuerdos import MEMORIA_PATH, Memoria
+            from tools.memoria import consultar_memoria_tool
+
+            if not MEMORIA_PATH.exists():
+                return fail(
+                    f"no hay memoria en {MEMORIA_PATH}; corre `uv run scripts/memoria.py "
+                    "importar data/memorias_demo.jsonl` o consolida una sesión."
+                )
+            tools.append(consultar_memoria_tool(Memoria(make_embedder(embedder or "gemini"))))
         runner = ToolRunner(tools, rol=rol, log_path=TOOL_LOG_PATH)
         extras = (" + documentos" if docs else "") + (" + grafo" if grafo else "")
+        extras += " + memoria" if memoria else ""
         print(f"{GRAY}herramientas: locales{extras} · rol {rol}{RESET}")
-        result = agent_cls(client, tools, on_event=on_event, runner=runner).run(question)
+        result = agent_cls(client, tools, on_event=on_event, runner=runner).run(
+            question, **run_kwargs
+        )
     respuesta, checked = result.respuesta, None
     llamadas, tokens, cost_usd = result.llamadas, result.tokens, result.cost_usd
     if verify and respuesta:
@@ -382,6 +437,11 @@ def run_agent(
         llamadas += extra.calls
         tokens += extra.tokens
         cost_usd += extra.cost_usd
+
+    if sesion and respuesta:
+        conversacion.agregar("usuario", question)
+        conversacion.agregar("agente", respuesta.strip())
+        conversacion.guardar()
 
     if actions:
         print("   ".join(actions))
@@ -466,6 +526,22 @@ def open_graph() -> KnowledgeGraph:
     return KnowledgeGraph.load(GRAPH_PATH)
 
 
+def open_router(store: VectorStore, client: LLMClient):
+    """Clase 9: el router con las fuentes que existan. Los documentos siempre; el grafo y la
+    memoria, si ya se crearon."""
+    from knowledge.graph import GRAPH_PATH
+    from knowledge.retrieval import Retriever
+    from knowledge.router import Router
+    from memory.recuerdos import MEMORIA_PATH, Memoria
+
+    fuentes = {"busqueda": Retriever(store, modo="hibrida")}
+    if GRAPH_PATH.exists():
+        fuentes["grafo"] = Retriever(store, modo="grafo", grafo=open_graph())
+    if MEMORIA_PATH.exists():
+        fuentes["memoria"] = Memoria(store.embedder)
+    return Router(fuentes, client)
+
+
 def run_rag(args: argparse.Namespace) -> int:
     """`--rag`: busca en el índice, responde con citas e imprime las fuentes (S43)."""
     from knowledge.rag import UMBRAL, answer
@@ -480,11 +556,15 @@ def run_rag(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
-    retriever = None
+    retriever = router = None
     try:
         client = build_client(args)
         where = build_where(args.tipo, args.proveedor)
-        if args.modo == "vector" and not (args.reescribir or args.rerank):
+        if args.modo == "auto":
+            # Clase 9: el router elige la fuente y el RAG responde con lo que trajo.
+            router = open_router(store, client)
+            result = answer(client, router, args.rag, k=args.k or RAG_K, where=where, umbral=None)
+        elif args.modo == "vector" and not (args.reescribir or args.rerank):
             # Clase 6: búsqueda vectorial y el umbral de distancia decide qué pasa.
             result = answer(client, store, args.rag, k=args.k or RAG_K, where=where, umbral=UMBRAL)
         else:
@@ -520,6 +600,12 @@ def run_rag(args: argparse.Namespace) -> int:
         pasos += ["rerank"] if args.rerank else []
         consultas = " · ".join(f"«{c}»" for c in retriever.consultas)
         print(f"{GRAY}búsqueda: {' + '.join(pasos)} · consultas: {consultas}{RESET}")
+    if router and router.ruta:
+        fuentes = ", ".join(router.fuentes)
+        print(
+            f"{GRAY}ruta: {router.ruta.fuente} (decidió {router.decidio}) · "
+            f"{router.ruta.motivo} · fuentes: {fuentes}{RESET}"
+        )
     return 0
 
 
@@ -573,6 +659,8 @@ def main(argv: list[str] | None = None) -> int:
             docs=args.docs,
             embedder=args.embedder,
             grafo=args.grafo,
+            sesion=args.sesion,
+            memoria=args.memoria,
         )
 
     if args.structured or args.tools:

@@ -127,15 +127,17 @@ class ReActAgent:
         if self.on_event:
             self.on_event(kind, data)
 
-    def _messages(self, pregunta: str, traza: list[TraceStep]) -> list[dict]:
+    def _messages(self, pregunta: str, traza: list[TraceStep], historial: str) -> list[dict]:
         return self.prompt.render(
             company=COMPANY,
             tools=describe_tools(self.tools),
             pregunta=pregunta,
             traza=format_trace(traza),
+            historial=historial,
         )
 
-    def run(self, pregunta: str) -> AgentResult:
+    def run(self, pregunta: str, historial: str = "") -> AgentResult:
+        """Recorre el ciclo ReAct. `historial` es la conversación previa (Clase 9)."""
         run_id = self._shared_run_id or uuid.uuid4().hex[:8]
         start = self.clock()
         traza: list[TraceStep] = []
@@ -157,7 +159,7 @@ class ReActAgent:
                     try:
                         paso = generate_structured(
                             self.client,
-                            self._messages(pregunta, traza),
+                            self._messages(pregunta, traza, historial),
                             AgentStep,
                             log_extra=log_extra,
                             **self.prompt.model_params,

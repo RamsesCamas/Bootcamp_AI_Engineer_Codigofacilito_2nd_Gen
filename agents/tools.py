@@ -54,6 +54,8 @@ POLITICAS: dict[str, ToolPolicy] = {
     "buscar_documentos": ToolPolicy("lectura", timeout_s=30),
     # Clase 8: el grafo está en memoria; no llama a ninguna API.
     "consultar_grafo": ToolPolicy("lectura", timeout_s=2),
+    # Clase 9: embedding de la consulta (y de los recuerdos que no estén en la caché).
+    "consultar_memoria": ToolPolicy("lectura", timeout_s=30),
 }
 ROLES: dict[Rol, set[Permiso]] = {"lectura": {"lectura"}, "operador": {"lectura", "escritura"}}
 
