@@ -110,6 +110,15 @@ class BuscarDocumentosArgs(BaseModel):
     )
 
 
+class ConsultarMemoriaArgs(BaseModel):
+    consulta: str = Field(
+        min_length=3,
+        description=(
+            "Qué recordar, con las palabras del usuario: un ticket, un acuerdo, una preferencia"
+        ),
+    )
+
+
 class ConsultarGrafoArgs(BaseModel):
     entidad: str = Field(
         min_length=2,
