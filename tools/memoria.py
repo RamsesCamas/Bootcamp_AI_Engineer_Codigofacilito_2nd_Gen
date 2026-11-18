@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING
 
-from contracts.tool_schemas import ConsultarMemoriaArgs, ToolSpec
+from contracts.tool_schemas import ConsultarMemoriaArgs, GuardarRecuerdoArgs, ToolSpec
 
 if TYPE_CHECKING:
     from memory.recuerdos import Memoria
@@ -27,6 +27,14 @@ def consultar_memoria(args: ConsultarMemoriaArgs, *, memoria: Memoria) -> dict:
             f"[memoria/{r.id}] ({r.tipo}, {r.actualizado[:10]}) {r.texto}" for r, _ in encontrados
         ]
     }
+
+
+def guardar_recuerdo(args: GuardarRecuerdoArgs, *, memoria: Memoria) -> dict:
+    """Escribe en el camino de la respuesta: lo que el usuario pidió recordar, al momento."""
+    # TODO(clase-9): práctica guiada. Si ya hay un recuerdo con el mismo texto, regresa
+    # {"id": su id, "nota": "Ya estaba en la memoria."}; si no, agrégalo con
+    # memoria.agregar y regresa {"id": el id nuevo, "guardado": el texto}.
+    raise NotImplementedError
 
 
 def consultar_memoria_tool(memoria: Memoria) -> ToolSpec:

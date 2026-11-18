@@ -12,6 +12,7 @@ El Agente Operador es un asistente para el equipo de operaciones de una empresa 
 - **Clase 6:** RAG escrito a mano (`knowledge/`): ingesta, chunking, embeddings con Gemini, índice en ChromaDB y respuestas con citas.
 - **Clase 7:** RAG agéntico: búsqueda híbrida (BM25 + vectores, fusionados con RRF), reescritura de la pregunta, re-ranking con el LLM y `buscar_documentos` como herramienta del agente.
 - **Clase 8:** GraphRAG con NetworkX: un grafo de tickets, proveedores, equipos, guardias, servicios y chunks, construido con datos, reglas y el LLM; PageRank personalizado para preguntas de varios saltos y `consultar_grafo` como herramienta del agente.
+- **Clase 9:** memoria (`memory/`): la sesión con historial y resumen (corto plazo), recuerdos con embeddings que el LLM consolida (largo plazo), y un router que decide si una pregunta va a la búsqueda, al grafo o a la memoria.
 
 ## Qué se construye en cada bloque
 
@@ -92,6 +93,12 @@ uv run main.py --agent react --docs "El T-1042 lleva 6 horas sin respuesta de Pa
 # GraphRAG (Clase 8; antes corre scripts/build_graph.py)
 uv run main.py --rag "¿Qué penalización aplica si el proveedor del T-1042 no responde a tiempo?" --modo grafo
 uv run main.py --agent react --docs --grafo "El T-1043 lleva 3 horas sin respuesta del proveedor, ¿ya incumplió su contrato?"
+
+# Memoria y router (Clase 9; antes importa data/memorias_demo.jsonl con scripts/memoria.py)
+uv run main.py --agent react --sesion demo "¿Cómo va el T-1043?"
+uv run main.py --agent react --sesion demo "¿Y quién lo atiende?"
+uv run main.py --rag "¿Qué quedé de revisar con PagosRed?" --modo auto
+uv run main.py --agent react --docs --grafo --memoria "¿Qué me falta para cerrar el T-1022?"
 ```
 
 Cada llamada imprime la respuesta y una línea gris con `proveedor · modelo · tokens in/out · latencia · costo`, y agrega una línea JSON por intento a `logs/llm_calls.jsonl`. Con `--prompt`, el log incluye `prompt_name` y `prompt_version`.
@@ -137,8 +144,16 @@ uv run scripts/build_graph.py
 uv run scripts/build_graph.py --llm --comunidades
 uv run scripts/eval_multihop.py --modos hibrida grafo hibrida+grafo --detalle
 
-# ¿Búsqueda o grafo? Una regla contra usar siempre una fuente (reto de la Clase 8)
-uv run scripts/eval_router.py --detalle --report reports/router.md
+# El golden del reto de la Clase 8 (router_v1); la regla de hoy ya incluye la memoria
+uv run scripts/eval_router.py --golden data/golden/router_v1.jsonl --detalle
+
+# Memoria de largo plazo en var/memoria.json (Clase 9)
+uv run scripts/memoria.py importar data/memorias_demo.jsonl
+uv run scripts/memoria.py buscar "¿A quién escalé el T-1043?"
+uv run scripts/memoria.py consolidar --sesion demo
+
+# Router: la regla y el LLM eligen búsqueda, grafo o memoria (Clase 9); --llm llama al LLM
+uv run scripts/eval_router.py --llm --detalle --report reports/router.md
 ```
 
 `compare_prompts.py` usa un solo proveedor sin fallback (el primario o el de `--provider`). `main.py --prompt` usa solo el primario si la cadena de fallbacks no se puede armar (por ejemplo, mientras `GroqProvider` esté pendiente).
@@ -165,6 +180,8 @@ uv run ruff format --check .
 | `data/golden/rag_v1.jsonl` | 10 preguntas con su fuente esperada y 1 fuera del corpus, para `eval_retrieval.py` |
 | `data/golden/multihop_v1.jsonl` | 6 preguntas que necesitan 2 documentos, con sus `fuentes_esperadas`, para `eval_multihop.py` |
 | `data/golden/router_v1.jsonl` | Las 20 preguntas con fuente de `rag_v3` y las 6 de `multihop_v1`, con su `fuente_preferida` (`busqueda` o `grafo`), para `eval_router.py` |
+| `data/golden/router_v2.jsonl` | `router_v1` más 4 paráfrasis de preguntas de varios saltos y 8 preguntas sobre lo que contó el usuario: `fuente_preferida` es `busqueda`, `grafo` o `memoria` |
+| `data/memorias_demo.jsonl` | 8 recuerdos de un usuario ficticio (equipo, guardia, pendientes, preferencias) para `scripts/memoria.py importar` y `eval_router.py` |
 
 ## Arquitectura
 
@@ -488,6 +505,33 @@ uv run main.py --agent react --docs --grafo --verbose "¿Qué penalización apli
 
 Costo: construir el grafo sin LLM es gratis; con `--llm` es una llamada por chunk (54 con el corpus actual), una sola vez gracias a la caché. Consultar el grafo no llama a ninguna API.
 
+## Clase 9: memoria de corto y largo plazo, y el router
+
+Hasta aquí, cada ejecución del agente empieza de cero: no sabe qué le preguntaste hace un minuto ni lo que le contaste la semana pasada. Esta clase le da dos memorias y cierra el bloque de conocimiento con un router que decide, por pregunta, si consultar la búsqueda, el grafo o la memoria.
+
+| Pieza | Archivo | Idea clave |
+|---|---|---|
+| Corto plazo | `memory/session.py` | La conversación de una sesión en `var/sesiones/ID.json`. El agente la recibe como `<historial>`. Arriba de 300 tokens, el LLM resume los turnos viejos junto con el resumen anterior (resumen recursivo) y los 4 últimos van completos |
+| Largo plazo | `memory/recuerdos.py` | Recuerdos de una oración con tipo (semántico, episódico o procedimental) y fechas en `var/memoria.json`. Se buscan por embeddings; el puntaje es la similitud más 0.1 × 0.995^horas desde la última actualización |
+| Consolidación | `memory/consolidar.py` | Después de la sesión, el LLM extrae hechos de los turnos nuevos y, por cada uno, decide frente a los 5 recuerdos más parecidos: agregar, actualizar, borrar o nada. Un id que no está en la lista se repara con `validation_context` |
+| Router | `knowledge/router.py` | `por_reglas` (primera persona → memoria; ticket + proveedor o contrato → grafo; si no, búsqueda) o `con_llm`, que elige leyendo la descripción de cada fuente. Si el LLM falla, decide la regla |
+| Herramienta | `tools/memoria.py` | `consultar_memoria(consulta)`: con documentos, grafo y memoria como herramientas, el agente ReAct elige la fuente en cada paso |
+
+Consolidar en segundo plano no agrega latencia a la respuesta, pero lo que el usuario dijo hoy llega a la memoria hasta que corre `consolidar`. Guardar en el camino de la respuesta (`guardar_recuerdo`, la práctica guiada) es inmediato, a cambio de que el agente decida qué guardar mientras responde.
+
+### Comandos
+
+```bash
+uv run main.py --agent react --sesion demo --verbose "¿Cómo va el T-1043?"
+uv run main.py --agent react --sesion demo --verbose "¿Y quién lo atiende?"
+uv run scripts/memoria.py importar data/memorias_demo.jsonl
+uv run scripts/memoria.py consolidar --sesion demo
+uv run main.py --rag "¿A quién escalé el T-1043?" --modo auto
+uv run scripts/eval_router.py --llm --detalle
+```
+
+Costo: con `--sesion`, cada paso del agente lleva el historial y, cuando pasa de 300 tokens, hay una llamada de resumen. `consolidar` hace una llamada para extraer y una por hecho si la memoria ya tiene recuerdos. El router con LLM hace una llamada por pregunta (38 en `eval_router.py --llm`); la regla no llama a nada.
+
 ## Retos
 
 ### Reto de la Clase 1: proveedor de respaldo y reporte
@@ -621,6 +665,25 @@ Opcional: migra el system prompt de `main.py` (busca `TODO(clase-2)`) a `prompts
 2. Escribe `scripts/eval_router.py` con una regla base `elegir_fuente(pregunta) -> str` (por ejemplo: si la pregunta nombra un ticket o un proveedor y pide un dato de otro documento, grafo; si no, búsqueda) y mide en cuántas de las 26 preguntas acierta.
 3. Calcula recall@5 de las 26 preguntas usando la fuente que eligió tu regla, y compáralo contra usar siempre `hibrida` y siempre `grafo`.
 4. Escribe en `reports/router.md` dónde falla tu regla. En la Clase 9 la reemplazamos por un router con el LLM en `knowledge/router.py`, que además decide cuándo consultar la memoria.
+
+### Práctica guiada de la Clase 9: guardar un recuerdo en el camino de la respuesta
+
+1. En `tests/test_consultar_memoria.py`, escribe tres tests con el `ToolRunner`: `guardar_recuerdo` con `{"texto": "Cubre la guardia N2 los jueves.", "tipo": "semantico"}` regresa el id nuevo y el recuerdo queda en la memoria; una segunda llamada con el mismo texto regresa el mismo id con la nota `"Ya estaba en la memoria."` y no agrega otro; con el rol `lectura`, el `ToolRunner` la niega. Deben fallar.
+2. En `tools/memoria.py` (busca `TODO(clase-9)`), implementa `guardar_recuerdo`.
+3. En el mismo archivo, escribe `guardar_recuerdo_tool(memoria)` con `GuardarRecuerdoArgs` (ya está en `contracts/tool_schemas.py`) y una descripción que diga cuándo usarla: solo cuando el usuario pide que recuerdes algo. Dale su política en `POLITICAS` (`escritura`, idempotente: el mismo texto no se duplica) y agrégala en `main.py` junto a `consultar_memoria` cuando venga `--memoria`.
+4. Prueba con los dos roles y revisa la memoria:
+   ```bash
+   uv run main.py --agent react --memoria --verbose "Recuerda que desde hoy cubro la guardia N2 los jueves"
+   uv run scripts/memoria.py listar
+   uv run main.py --agent react --memoria --rol lectura "Recuerda que prefiero respuestas cortas"
+   ```
+
+### Reto para la Clase 10: reanudar una ejecución que falló
+
+1. En `agents/checkpoint.py`, guarda el estado de una ejecución del agente ReAct después de cada paso en `var/ejecuciones/ID.json`: la pregunta, el historial y la traza (pensamiento, herramienta, argumentos, observación, tokens y costo de cada paso). Escribe con un archivo temporal y `os.replace`, como en `tools/tickets.py`: un corte a la mitad no debe dejar un JSON roto.
+2. Agrega a `ReActAgent.run` un parámetro para recibir esa traza y seguir desde el paso siguiente, sin volver a ejecutar las herramientas que ya corrieron. Una ejecución que terminó con `motivo: error`, o que se cortó, se puede reanudar; una que respondió, no.
+3. En `main.py`, agrega `--ejecucion ID` (guarda cada paso) y `--reanudar ID` (retoma la que no terminó, sin volver a escribir la pregunta). Pruébalo con un test: un `FakeProvider` que falla en la tercera llamada y, después, otro que responde.
+4. Escribe en `reports/reanudar.md` cuántas llamadas al LLM y a herramientas se ahorran al reanudar contra empezar de cero, y qué pasa si se cae justo después de ejecutar una herramienta de escritura y antes de guardar el paso. En la Clase 11 comparamos tu versión con el checkpointing de LangGraph.
 
 ## Avisos
 
