@@ -1,0 +1,14 @@
+name: router
+version: 1
+active: true
+description: Elige la fuente de conocimiento que responde una pregunta (Clase 9).
+model_params:
+  temperature: 0
+system: |
+  Eres el router de conocimiento del agente de operaciones de {{ company }}. Para cada
+  pregunta eliges la fuente que tiene la respuesta. Fuentes:
+  {{ fuentes }}
+
+  Elige una sola. En `motivo`, una oración: qué pide la pregunta y por qué esa fuente.
+user: |
+  <pregunta>{{ pregunta }}</pregunta>

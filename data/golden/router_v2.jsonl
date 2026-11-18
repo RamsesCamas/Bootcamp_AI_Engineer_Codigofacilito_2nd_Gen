@@ -1,0 +1,38 @@
+{"id": "q01", "pregunta": "¿Cuándo escalo un ticket de prioridad alta?", "fuentes_esperadas": ["politicas/escalamiento.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q02", "pregunta": "¿Cuál es el tiempo de respuesta de PagosRed según su contrato?", "fuentes_esperadas": ["contratos/pagosred.pdf"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q03", "pregunta": "¿Qué pasa si PagosRed no cumple el tiempo de respuesta?", "fuentes_esperadas": ["contratos/pagosred.pdf"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q04", "pregunta": "¿Qué hago si hay cobros duplicados en la pasarela de pagos?", "fuentes_esperadas": ["runbooks/caida-pagos.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q05", "pregunta": "¿Qué hago si el portal de proveedores responde con error 503?", "fuentes_esperadas": ["runbooks/portal-proveedores.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q06", "pregunta": "¿Cómo reinicio la cola de pedidos?", "fuentes_esperadas": ["runbooks/reinicio-colas.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q07", "pregunta": "¿En qué horario cubre la guardia N1?", "fuentes_esperadas": ["politicas/guardias.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q08", "pregunta": "¿Qué crédito recibe Acme por cada hora que el portal hospedado por NubeHost no está disponible?", "fuentes_esperadas": ["contratos/nubehost.pdf"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q09", "pregunta": "¿Cómo restablezco mi contraseña?", "fuentes_esperadas": ["faq/accesos.txt"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q10", "pregunta": "¿Qué días se paga a los proveedores?", "fuentes_esperadas": ["faq/facturacion.txt"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q12", "pregunta": "¿Puedo compartir mi usuario con otra persona de mi equipo?", "fuentes_esperadas": ["faq/accesos.txt"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q13", "pregunta": "¿Quién queda como responsable de un ticket de prioridad alta cuando se escala a la Guardia N2?", "fuentes_esperadas": ["politicas/escalamiento.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q14", "pregunta": "Si después de reiniciar la cola un pedido se procesó dos veces, ¿dónde lo cancelo?", "fuentes_esperadas": ["runbooks/reinicio-colas.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q15", "pregunta": "¿Con cuántas horas de anticipación debe avisar NubeHost sus ventanas de mantenimiento?", "fuentes_esperadas": ["contratos/nubehost.pdf"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q17", "pregunta": "¿Qué pasó con el T-1016?", "fuentes_esperadas": ["runbooks/portal-proveedores.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q18", "pregunta": "¿Qué hago con el T-1022?", "fuentes_esperadas": ["runbooks/reinicio-colas.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q19", "pregunta": "¿Qué se sabe del T-1009?", "fuentes_esperadas": ["politicas/escalamiento.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q20", "pregunta": "¿Qué dice el runbook sobre el T-1042?", "fuentes_esperadas": ["runbooks/caida-pagos.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q21", "pregunta": "¿Qué runbook aplica al T-1005?", "fuentes_esperadas": ["runbooks/portal-proveedores.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "q22", "pregunta": "¿Qué hago si el tablero marca más de 500 mensajes pendientes?", "fuentes_esperadas": ["runbooks/reinicio-colas.md"], "fuente_preferida": "busqueda", "origen": "rag_v3"}
+{"id": "m1", "pregunta": "El T-1043 lleva 3 horas sin respuesta del proveedor, ¿ya incumplió su contrato?", "fuentes_esperadas": ["runbooks/portal-proveedores.md", "contratos/nubehost.pdf"], "fuente_preferida": "grafo", "origen": "multihop_v1"}
+{"id": "m2", "pregunta": "¿Qué penalización aplica si el proveedor del T-1042 no da su primera respuesta a tiempo?", "fuentes_esperadas": ["runbooks/caida-pagos.md", "contratos/pagosred.pdf"], "fuente_preferida": "grafo", "origen": "multihop_v1"}
+{"id": "m3", "pregunta": "¿Qué área de Acme es dueña del servicio del proveedor que hospeda el portal de proveedores?", "fuentes_esperadas": ["runbooks/portal-proveedores.md", "contratos/nubehost.pdf"], "fuente_preferida": "busqueda", "origen": "multihop_v1"}
+{"id": "m4", "pregunta": "El T-1009 sigue sin respuesta del proveedor: ¿en cuántas horas hábiles debía contestar y a quién se escala?", "fuentes_esperadas": ["politicas/escalamiento.md", "contratos/transportes-sierra.pdf"], "fuente_preferida": "grafo", "origen": "multihop_v1"}
+{"id": "m5", "pregunta": "¿Cada cuánto debe entregar su reporte de conciliación el proveedor del T-1014?", "fuentes_esperadas": ["runbooks/caida-pagos.md", "contratos/pagosred.pdf"], "fuente_preferida": "busqueda", "origen": "multihop_v1"}
+{"id": "m6", "pregunta": "Si la cola de facturas se atora en día de cierre, ¿quién autoriza reiniciarla y qué nivel de guardia puede hacerlo?", "fuentes_esperadas": ["runbooks/reinicio-colas.md", "politicas/guardias.md"], "fuente_preferida": "busqueda", "origen": "multihop_v1"}
+{"id": "p1", "pregunta": "¿Qué multa le toca a la empresa del T-1042 si tarda en dar su primera respuesta?", "fuentes_esperadas": ["runbooks/caida-pagos.md", "contratos/pagosred.pdf"], "fuente_preferida": "grafo", "origen": "parafrasis"}
+{"id": "p2", "pregunta": "Nadie contesta el T-1009: ¿en cuántas horas hábiles debían responder y a quién se escala?", "fuentes_esperadas": ["politicas/escalamiento.md", "contratos/transportes-sierra.pdf"], "fuente_preferida": "grafo", "origen": "parafrasis"}
+{"id": "p3", "pregunta": "¿Qué penalización tiene quien atiende el T-1016 si no responde a tiempo?", "fuentes_esperadas": ["runbooks/portal-proveedores.md", "contratos/nubehost.pdf"], "fuente_preferida": "grafo", "origen": "parafrasis"}
+{"id": "p4", "pregunta": "El T-1005 sigue abierto: ¿qué dice el acuerdo de servicio de la empresa responsable sobre el tiempo de respuesta?", "fuentes_esperadas": ["runbooks/portal-proveedores.md", "contratos/nubehost.pdf"], "fuente_preferida": "grafo", "origen": "parafrasis"}
+{"id": "u1", "pregunta": "¿A quién escalé el T-1043?", "fuentes_esperadas": ["memoria/r3"], "fuente_preferida": "memoria", "origen": "memorias_demo"}
+{"id": "u2", "pregunta": "¿En qué equipo trabajo?", "fuentes_esperadas": ["memoria/r2"], "fuente_preferida": "memoria", "origen": "memorias_demo"}
+{"id": "u3", "pregunta": "¿Cómo te pedí que te diera las respuestas?", "fuentes_esperadas": ["memoria/r1"], "fuente_preferida": "memoria", "origen": "memorias_demo"}
+{"id": "u4", "pregunta": "¿Qué quedé de revisar con PagosRed?", "fuentes_esperadas": ["memoria/r4"], "fuente_preferida": "memoria", "origen": "memorias_demo"}
+{"id": "u5", "pregunta": "¿Qué me falta para cerrar el T-1022?", "fuentes_esperadas": ["memoria/r8"], "fuente_preferida": "memoria", "origen": "memorias_demo"}
+{"id": "u6", "pregunta": "¿Qué acordé con Logística sobre los tickets de Transportes Sierra?", "fuentes_esperadas": ["memoria/r7"], "fuente_preferida": "memoria", "origen": "memorias_demo"}
+{"id": "u7", "pregunta": "¿Qué día cubro la guardia N2?", "fuentes_esperadas": ["memoria/r2"], "fuente_preferida": "memoria", "origen": "memorias_demo"}
+{"id": "u8", "pregunta": "Recuérdame cómo quiero que cites los contratos.", "fuentes_esperadas": ["memoria/r5"], "fuente_preferida": "memoria", "origen": "memorias_demo"}

@@ -22,6 +22,7 @@ Uso:
     uv run main.py --rag "¿Qué penalización tiene el proveedor del T-1042?" --modo grafo
     uv run main.py --agent react --docs --grafo "El T-1043 lleva 3 horas: ¿ya incumplió?"
     uv run main.py --agent react --sesion demo "¿Cómo va el T-1042?"
+    uv run main.py --rag "¿A quién escalé el T-1043?" --modo auto
 """
 
 from __future__ import annotations
@@ -70,7 +71,7 @@ TOOL_LOG_PATH = Path(__file__).parent / "logs" / "tool_calls.jsonl"
 # Clase 6: RAG sobre data/docs, indexados con scripts/ingest_docs.py.
 RAG_K = 5
 # Clase 7: los modos de knowledge/retrieval.py (aquí sin importarlo: carga ChromaDB).
-RAG_MODOS = ("vector", "bm25", "hibrida", "grafo", "hibrida+grafo")
+RAG_MODOS = ("vector", "bm25", "hibrida", "grafo", "hibrida+grafo", "auto")
 
 # Herramientas disponibles en el modo --tools.
 TOOLS = [BUSCAR_TICKET, CONSULTAR_PROVEEDOR]
@@ -173,7 +174,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--modo",
         choices=RAG_MODOS,
         default="vector",
-        help="Con --rag, cómo buscar: vector (Clase 6), bm25 o hibrida (Clase 7), grafo (Clase 8).",
+        help="Con --rag, cómo buscar: vector (Clase 6), bm25 o hibrida (Clase 7), grafo "
+        "(Clase 8) o auto: el router elige búsqueda, grafo o memoria (Clase 9).",
     )
     parser.add_argument(
         "--reescribir",
@@ -206,6 +208,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         others = (args.prompt, args.ticket, args.agent, args.prompt_name, args.demo, args.sesion)
         if any(others) or args.structured or args.tools or args.docs or args.grafo:
             parser.error("--rag recibe la pregunta y no se combina con otros modos.")
+        if args.modo == "auto" and (args.reescribir or args.rerank):
+            parser.error("--modo auto no se combina con --reescribir ni --rerank.")
         return args
     if args.k is not None or (args.embedder is not None and not args.docs):
         parser.error("--k requiere --rag; --embedder requiere --rag o --docs.")
@@ -502,6 +506,22 @@ def open_graph() -> KnowledgeGraph:
     return KnowledgeGraph.load(GRAPH_PATH)
 
 
+def open_router(store: VectorStore, client: LLMClient):
+    """Clase 9: el router con las fuentes que existan. Los documentos siempre; el grafo y la
+    memoria, si ya se crearon."""
+    from knowledge.graph import GRAPH_PATH
+    from knowledge.retrieval import Retriever
+    from knowledge.router import Router
+    from memory.recuerdos import MEMORIA_PATH, Memoria
+
+    fuentes = {"busqueda": Retriever(store, modo="hibrida")}
+    if GRAPH_PATH.exists():
+        fuentes["grafo"] = Retriever(store, modo="grafo", grafo=open_graph())
+    if MEMORIA_PATH.exists():
+        fuentes["memoria"] = Memoria(store.embedder)
+    return Router(fuentes, client)
+
+
 def run_rag(args: argparse.Namespace) -> int:
     """`--rag`: busca en el índice, responde con citas e imprime las fuentes (S43)."""
     from knowledge.rag import UMBRAL, answer
@@ -516,11 +536,15 @@ def run_rag(args: argparse.Namespace) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 2
 
-    retriever = None
+    retriever = router = None
     try:
         client = build_client(args)
         where = build_where(args.tipo, args.proveedor)
-        if args.modo == "vector" and not (args.reescribir or args.rerank):
+        if args.modo == "auto":
+            # Clase 9: el router elige la fuente y el RAG responde con lo que trajo.
+            router = open_router(store, client)
+            result = answer(client, router, args.rag, k=args.k or RAG_K, where=where, umbral=None)
+        elif args.modo == "vector" and not (args.reescribir or args.rerank):
             # Clase 6: búsqueda vectorial y el umbral de distancia decide qué pasa.
             result = answer(client, store, args.rag, k=args.k or RAG_K, where=where, umbral=UMBRAL)
         else:
@@ -556,6 +580,12 @@ def run_rag(args: argparse.Namespace) -> int:
         pasos += ["rerank"] if args.rerank else []
         consultas = " · ".join(f"«{c}»" for c in retriever.consultas)
         print(f"{GRAY}búsqueda: {' + '.join(pasos)} · consultas: {consultas}{RESET}")
+    if router and router.ruta:
+        fuentes = ", ".join(router.fuentes)
+        print(
+            f"{GRAY}ruta: {router.ruta.fuente} (decidió {router.decidio}) · "
+            f"{router.ruta.motivo} · fuentes: {fuentes}{RESET}"
+        )
     return 0
 
 
