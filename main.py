@@ -216,8 +216,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--ejecucion",
         metavar="ID",
-        help="Con --agent react, guarda el estado después de cada paso en "
-        "var/ejecuciones/ID.json para poder reanudarla (reto de la Clase 9).",
+        help="Con --agent react, guarda el estado de cada paso en var/ejecuciones/ID.json "
+        "(reto de la Clase 9); con --agent grafo, es el thread_id en var/checkpoints.db "
+        "(Clase 11).",
     )
     parser.add_argument(
         "--reanudar",
@@ -255,8 +256,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--verify requiere --agent.")
     if args.sesion and args.agent not in ("react", "grafo"):
         parser.error("--sesion requiere --agent react o grafo.")
-    if args.ejecucion and (args.agent != "react" or args.mcp):
-        parser.error("--ejecucion requiere --agent react y no se combina con --mcp.")
+    if args.ejecucion and (args.agent not in ("react", "grafo") or args.mcp):
+        parser.error("--ejecucion requiere --agent react o grafo, sin --mcp.")
     if args.reanudar and (args.agent != "react" or args.mcp):
         parser.error("--reanudar requiere --agent react y no se combina con --mcp.")
     if args.ejecucion and args.reanudar:
@@ -401,13 +402,25 @@ def run_agent(
 
     def correr(tools, runner=None):
         """Corre el agente elegido. El grafo de la Clase 11 recibe lo mismo que el ReAct."""
+        nonlocal hilo
         if kind != "grafo":
             agente = agent_cls(client, tools, on_event=on_event, runner=runner)
             return agente.run(question, **run_kwargs)
-        from agents.grafo_react import AgenteGrafo
+        from agents.grafo_react import CHECKPOINTS_PATH, AgenteGrafo, abrir_checkpointer
 
-        agente = AgenteGrafo(client, tools, on_event=on_event, runner=runner)
-        return agente.run(question, run_kwargs.get("historial", ""))
+        with abrir_checkpointer() as saver:
+            agente = AgenteGrafo(
+                client, tools, on_event=on_event, runner=runner, checkpointer=saver
+            )
+            try:
+                historial = run_kwargs.get("historial", "")
+                resultado = agente.run(question, historial, ejecucion=ejecucion)
+            except ValueError as e:  # el id ya existe
+                fail(str(e))
+                return None
+        hilo = agente.ejecucion
+        print(f"{GRAY}ejecución {hilo} · checkpoints en {CHECKPOINTS_PATH}{RESET}")
+        return resultado
 
     run_kwargs: dict = {}
     if sesion:
@@ -428,7 +441,7 @@ def run_agent(
         run_kwargs["historial"] = conversacion.historial()
     hilo = ejecucion or reanudar  # el id de la ejecución, para --reanudar
     guardada = None
-    if hilo:
+    if hilo and kind == "react":
         # Reto de la Clase 9: el estado después de cada paso, en var/ejecuciones/ID.json.
         from agents.checkpoint import Ejecucion
 
@@ -497,6 +510,8 @@ def run_agent(
         extras += " + memoria" if memoria else ""
         print(f"{GRAY}herramientas: locales{extras} · rol {rol}{RESET}")
         result = correr(tools, runner)
+    if result is None:
+        return 1
     if guardada:
         guardada.terminar(result)
     respuesta, checked = result.respuesta, None

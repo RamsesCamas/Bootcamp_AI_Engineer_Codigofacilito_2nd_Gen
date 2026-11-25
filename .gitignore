@@ -27,6 +27,7 @@ var/*.json
 var/*.tmp
 var/sesiones/
 var/ejecuciones/
+var/*.db*
 .mcp-inspector/
 
 # RAG: índice vectorial y caché de embeddings (Clase 6)
