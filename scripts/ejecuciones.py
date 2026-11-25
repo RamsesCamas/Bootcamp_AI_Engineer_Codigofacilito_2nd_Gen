@@ -87,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     with abrir_checkpointer(args.db) as saver:
-        agente = AgenteGrafo(None, [], checkpointer=saver)
+        # Con el nodo de la práctica guiada: lee las ejecuciones con y sin verificar.
+        agente = AgenteGrafo(None, [], checkpointer=saver, verificar=True)
         if args.comando == "listar":
             print("\n".join(listar(agente, saver)) or "No hay ejecuciones.")
             return 0

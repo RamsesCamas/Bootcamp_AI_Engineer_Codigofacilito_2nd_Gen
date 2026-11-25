@@ -19,7 +19,7 @@ from core.fallas import ClienteConFalla
 from core.llm_client import LLMClient
 from main import parse_args, run_agent
 from tests.agent_helpers import answer, reply, use_tool
-from tests.conftest import FakeProvider
+from tests.conftest import FakeProvider, make_response
 
 PREGUNTA = "Compara el T-1042 y el T-1043"
 CAIDA = PermanentProviderError("gemini", "sin cuota")
@@ -231,3 +231,42 @@ def test_reanudar_el_grafo_desde_la_cli():
     assert parse_args(["--agent", "grafo", "--reanudar", "g1"]).reanudar == "g1"
     with pytest.raises(SystemExit):
         parse_args(["--agent", "grafo", "--mcp", "--ejecucion", "g1", "¿Y el T-1043?"])
+
+
+def verificacion(aprobada: bool, *problemas: str) -> dict:
+    return {"problemas": list(problemas), "aprobada": aprobada}
+
+
+def test_verificar_aprueba(logger, fake_sleep):
+    script = [use_tool(), answer("Está en revisión."), verificacion(True)]
+    _, grafo = agente(script, logger, fake_sleep, verificar=True)
+
+    resultado = grafo.run("¿Cómo va el T-1042?", ejecucion="v1")
+
+    valores = grafo.grafo.get_state({"configurable": {"thread_id": "v1"}}).values
+    assert resultado.respuesta == "Está en revisión."
+    assert valores["verificacion"] == {"problemas": [], "aprobada": True}
+
+
+def test_verificar_corrige(logger, fake_sleep):
+    script = [
+        use_tool(),
+        answer("Ya está resuelto."),
+        verificacion(False, "La traza dice que está en revisión."),
+        make_response("gemini", "Está en revisión."),
+    ]
+    _, grafo = agente(script, logger, fake_sleep, verificar=True)
+
+    resultado = grafo.run("¿Cómo va el T-1042?", ejecucion="v1")
+
+    valores = grafo.grafo.get_state({"configurable": {"thread_id": "v1"}}).values
+    assert resultado.respuesta == "Está en revisión."
+    assert valores["verificacion"]["problemas"] == ["La traza dice que está en revisión."]
+
+
+def test_el_nodo_verificar_es_opcional(logger, fake_sleep):
+    _, sin = agente([], logger, fake_sleep)
+    _, con = agente([], logger, fake_sleep, verificar=True)
+
+    assert "verificar" not in sin.grafo.get_graph().nodes
+    assert "verificar" in con.grafo.get_graph().nodes

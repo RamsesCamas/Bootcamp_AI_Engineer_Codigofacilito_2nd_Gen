@@ -40,6 +40,7 @@ from agents.react_agent import (
     format_trace,
 )
 from agents.trace import AgentResult
+from agents.verifier import verify_and_revise
 from contracts.structured_output import StructuredOutputError, generate_structured
 from contracts.tool_loop import execute_tool
 from core.errors import AllProvidersFailedError
@@ -64,6 +65,7 @@ class Estado(TypedDict):
     pendiente: dict | None  # la acción que decidió el LLM y que `actuar` todavía no ejecuta
     respuesta: str | None
     motivo: str | None
+    verificacion: dict | None  # práctica guiada: lo que dijo el verificador
 
 
 @contextmanager
@@ -87,6 +89,7 @@ class AgenteGrafo:
         checkpointer: BaseCheckpointSaver | None = None,
         clock: Callable[[], float] = time.monotonic,
         on_event: EventHandler | None = None,
+        verificar: bool = False,
     ) -> None:
         self.client = client
         self.tools = list(tools)
@@ -96,6 +99,7 @@ class AgenteGrafo:
         self.clock = clock
         self.on_event = on_event
         self.prompt = PromptKit(PROMPTS_DIR).get("react_agent")
+        self.verificar = verificar
         # Sin checkpointer, uno en memoria: el estado de cada paso vive mientras viva el proceso.
         self.grafo = self._construir().compile(checkpointer=checkpointer or InMemorySaver())
         self.ejecucion = ""
@@ -106,7 +110,12 @@ class AgenteGrafo:
         grafo.add_node("decidir", self._decidir)
         grafo.add_node("actuar", self._actuar)
         grafo.add_edge(START, "decidir")
-        grafo.add_conditional_edges("decidir", self._siguiente, ["actuar", END])
+        destinos = ["actuar", END]
+        if self.verificar:  # práctica guiada: decidir → verificar → END
+            grafo.add_node("verificar", self._verificar)
+            grafo.add_edge("verificar", END)
+            destinos.append("verificar")
+        grafo.add_conditional_edges("decidir", self._siguiente, destinos)
         grafo.add_edge("actuar", "decidir")
         return grafo
 
@@ -171,13 +180,19 @@ class AgenteGrafo:
 
     def _verificar(self, estado: Estado) -> dict:
         """Práctica guiada de la Clase 11: revisa la respuesta contra la traza (Clase 4)."""
-        # TODO(clase-11): llama a verify_and_revise con la pregunta, la respuesta y la traza, y
-        # regresa la respuesta final y "verificacion": {"aprobada": ..., "problemas": [...]}.
-        raise NotImplementedError("Práctica guiada de la Clase 11")
+        traza = [dict_a_paso(p) for p in estado["pasos"]]
+        revisada = verify_and_revise(self.client, estado["pregunta"], estado["respuesta"], traza)
+        verificacion = revisada.verificacion.model_dump()
+        self._emit("verificacion", verificacion=verificacion, corregida=revisada.corregida)
+        return {"respuesta": revisada.respuesta, "verificacion": verificacion}
 
     def _siguiente(self, estado: Estado) -> str:
         """La arista condicional: si hay una acción pendiente, a `actuar`; si no, se termina."""
-        return "actuar" if estado["pendiente"] else END
+        if estado["pendiente"]:
+            return "actuar"
+        if self.verificar and estado["respuesta"]:
+            return "verificar"
+        return END
 
     def _config(self) -> dict:
         return {"configurable": {"thread_id": self.ejecucion}}
@@ -200,6 +215,7 @@ class AgenteGrafo:
             "pendiente": None,
             "respuesta": None,
             "motivo": None,
+            "verificacion": None,
         }
         return self._invocar(entrada)
 

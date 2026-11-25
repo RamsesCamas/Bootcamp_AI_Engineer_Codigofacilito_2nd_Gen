@@ -401,6 +401,12 @@ def run_agent(
             print(f"{GRAY}    ← {json.dumps(data['observacion'], ensure_ascii=False)}{RESET}")
         elif event == "reanudada":
             print(f"{GRAY}reanudada: {data['pasos']} pasos guardados{RESET}")
+        elif event == "verificacion":
+            if data["corregida"]:
+                problemas = "; ".join(data["verificacion"]["problemas"])
+                print(f"{GRAY}verificación: no aprobada ({problemas}) → respuesta corregida{RESET}")
+            else:
+                print(f"{GRAY}verificación: aprobada{RESET}")
 
     agent_cls = ReActAgent if kind == "react" else PlanAndExecute
 
@@ -414,7 +420,12 @@ def run_agent(
 
         with abrir_checkpointer() as saver:
             agente = AgenteGrafo(
-                client, tools, on_event=on_event, runner=runner, checkpointer=saver
+                client,
+                tools,
+                on_event=on_event,
+                runner=runner,
+                checkpointer=saver,
+                verificar=verify,  # práctica guiada: el grafo verifica en su propio nodo
             )
             try:
                 if reanudar:
@@ -523,7 +534,7 @@ def run_agent(
         guardada.terminar(result)
     respuesta, checked = result.respuesta, None
     llamadas, tokens, cost_usd = result.llamadas, result.tokens, result.cost_usd
-    if verify and respuesta:
+    if verify and respuesta and kind != "grafo":
         with client.track() as extra:
             checked = verify_and_revise(client, question, respuesta, result.traza)
         respuesta = checked.respuesta
