@@ -26,6 +26,7 @@ Uso:
     uv run main.py --agent react --memoria "¿Qué quedé de revisar con PagosRed?"
     uv run main.py --agent react --ejecucion r1 --falla-en 3 "Compara el T-1042 y el T-1043"
     uv run main.py --agent react --reanudar r1
+    uv run main.py --agent grafo --verbose "Compara el T-1042 y el T-1043"
 """
 
 from __future__ import annotations
@@ -128,8 +129,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--agent",
-        choices=("react", "plan"),
-        help="Responde con un agente ReAct o plan-and-execute (Clase 4).",
+        choices=("react", "plan", "grafo"),
+        help="Responde con un agente ReAct o plan-and-execute (Clase 4), o con el ReAct como "
+        "grafo de LangGraph (Clase 11).",
     )
     parser.add_argument(
         "--verbose",
@@ -208,8 +210,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--sesion",
         metavar="ID",
-        help="Con --agent react, guarda la conversación en var/sesiones/ID.json y la usa como "
-        "historial del siguiente turno (Clase 9).",
+        help="Con --agent react o grafo, guarda la conversación en var/sesiones/ID.json y la "
+        "usa como historial del siguiente turno (Clase 9).",
     )
     parser.add_argument(
         "--ejecucion",
@@ -251,8 +253,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--docs, --grafo y --memoria requieren --agent y no se combinan con --mcp.")
     if args.verify and not args.agent:
         parser.error("--verify requiere --agent.")
-    if args.sesion and args.agent != "react":
-        parser.error("--sesion requiere --agent react.")
+    if args.sesion and args.agent not in ("react", "grafo"):
+        parser.error("--sesion requiere --agent react o grafo.")
     if args.ejecucion and (args.agent != "react" or args.mcp):
         parser.error("--ejecucion requiere --agent react y no se combina con --mcp.")
     if args.reanudar and (args.agent != "react" or args.mcp):
@@ -396,6 +398,17 @@ def run_agent(
             print(f"{GRAY}    ← {json.dumps(data['observacion'], ensure_ascii=False)}{RESET}")
 
     agent_cls = ReActAgent if kind == "react" else PlanAndExecute
+
+    def correr(tools, runner=None):
+        """Corre el agente elegido. El grafo de la Clase 11 recibe lo mismo que el ReAct."""
+        if kind != "grafo":
+            agente = agent_cls(client, tools, on_event=on_event, runner=runner)
+            return agente.run(question, **run_kwargs)
+        from agents.grafo_react import AgenteGrafo
+
+        agente = AgenteGrafo(client, tools, on_event=on_event, runner=runner)
+        return agente.run(question, run_kwargs.get("historial", ""))
+
     run_kwargs: dict = {}
     if sesion:
         # Clase 9: la conversación previa entra al prompt; lo más viejo, resumido.
@@ -440,9 +453,7 @@ def run_agent(
 
         with MCPToolset(rol=rol) as toolset:
             print(f"{GRAY}herramientas: MCP por stdio · rol {rol}{RESET}")
-            result = agent_cls(client, toolset.tools(), on_event=on_event).run(
-                question, **run_kwargs
-            )
+            result = correr(toolset.tools())
     else:
         # El agente puede proponer actualizar_estado; el ToolRunner decide según el rol.
         extras = [ACTUALIZAR_ESTADO, LISTAR_TICKETS_POR_PROVEEDOR, CREAR_TICKET]
@@ -485,9 +496,7 @@ def run_agent(
         extras = (" + documentos" if docs else "") + (" + grafo" if grafo else "")
         extras += " + memoria" if memoria else ""
         print(f"{GRAY}herramientas: locales{extras} · rol {rol}{RESET}")
-        result = agent_cls(client, tools, on_event=on_event, runner=runner).run(
-            question, **run_kwargs
-        )
+        result = correr(tools, runner)
     if guardada:
         guardada.terminar(result)
     respuesta, checked = result.respuesta, None
