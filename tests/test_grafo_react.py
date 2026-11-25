@@ -5,17 +5,31 @@ from __future__ import annotations
 import json
 
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
 
 import main
+import tools.tickets
 from agents import AgentBudget
 from agents.grafo_react import AgenteGrafo, abrir_checkpointer
+from agents.tools import ToolRunner
 from contracts import BUSCAR_TICKET
+from contracts.tool_schemas import CREAR_TICKET
+from core.errors import PermanentProviderError
+from core.fallas import ClienteConFalla
 from core.llm_client import LLMClient
 from main import parse_args, run_agent
 from tests.agent_helpers import answer, reply, use_tool
 from tests.conftest import FakeProvider
 
 PREGUNTA = "Compara el T-1042 y el T-1043"
+CAIDA = PermanentProviderError("gemini", "sin cuota")
+CREAR = use_tool(
+    "crear_ticket", asunto="Falla en pagos", descripcion="Rechaza tarjetas", prioridad="alta"
+)
+
+
+class Caida(Exception):
+    """El proceso muere a la mitad de un nodo."""
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +46,10 @@ def cliente(script, logger, fake_sleep):
 def agente(script, logger, fake_sleep, **kwargs):
     provider, client = cliente(script, logger, fake_sleep)
     return provider, AgenteGrafo(client, [BUSCAR_TICKET], **kwargs)
+
+
+def tickets_creados() -> int:
+    return len(tools.tickets._nuevos()["tickets"])
 
 
 def test_responde_como_el_react(logger, fake_sleep):
@@ -136,3 +154,80 @@ def test_la_cli_rechaza_un_id_repetido(logger, fake_sleep, capsys):
     assert "ejecución g0" in capsys.readouterr().out
     assert run_agent(client, "grafo", "Otra", verbose=False, ejecucion="g0") == 1
     assert "ya existe la ejecución g0" in capsys.readouterr().err
+
+
+def test_falla_y_reanuda_sin_repetir_herramientas(logger, fake_sleep):
+    saver = InMemorySaver()  # el mismo checkpointer para la ejecución que falla y la que sigue
+    script = [use_tool(), use_tool(ticket_id="T-1043"), CAIDA]
+    _, grafo = agente(script, logger, fake_sleep, checkpointer=saver)
+    primera = grafo.run(PREGUNTA, ejecucion="e1")
+    assert (primera.motivo, len(primera.traza)) == ("error", 2)
+    assert grafo.grafo.get_state({"configurable": {"thread_id": "e1"}}).next == ("decidir",)
+
+    runner = ToolRunner([BUSCAR_TICKET])
+    provider, grafo = agente(
+        [answer("El T-1043 va más atrasado.")],
+        logger,
+        fake_sleep,
+        checkpointer=saver,
+        runner=runner,
+    )
+    segunda = grafo.reanudar("e1")
+
+    assert (segunda.motivo, len(segunda.traza)) == ("respuesta", 2)
+    assert len(provider.calls) == 1  # solo el decidir que había fallado
+    assert runner.eventos == []  # ninguna herramienta se volvió a ejecutar
+
+
+def test_reanudar_valida_la_ejecucion(logger, fake_sleep):
+    _, grafo = agente([answer("Listo.")], logger, fake_sleep)
+    grafo.run("Hola", ejecucion="e1")
+
+    with pytest.raises(ValueError, match="ya terminó"):
+        grafo.reanudar("e1")
+    with pytest.raises(LookupError, match="no hay una ejecución e9"):
+        grafo.reanudar("e9")
+
+
+def test_si_se_cae_al_escribir_repite_la_misma_accion(logger, fake_sleep):
+    saver = InMemorySaver()
+
+    def se_cae(kind, data):  # después de crear el ticket y antes del checkpoint de actuar
+        if kind == "observacion":
+            raise Caida
+
+    _, client = cliente([CREAR], logger, fake_sleep)
+    runner = ToolRunner([CREAR_TICKET])
+    grafo = AgenteGrafo(client, [CREAR_TICKET], runner=runner, checkpointer=saver, on_event=se_cae)
+    with pytest.raises(Caida):
+        grafo.run("Crea un ticket: el portal de pagos rechaza tarjetas", ejecucion="e1")
+    assert tickets_creados() == 1
+
+    provider, client = cliente([answer("Creé el T-2001.")], logger, fake_sleep)
+    runner = ToolRunner([CREAR_TICKET])  # otro proceso: su request_id sale del estado
+    grafo = AgenteGrafo(client, [CREAR_TICKET], runner=runner, checkpointer=saver)
+    resultado = grafo.reanudar("e1")
+
+    assert len(provider.calls) == 1  # la acción ya estaba en el estado: el LLM no decide otra vez
+    assert resultado.traza[0].observacion["duplicado_evitado"] is True
+    assert tickets_creados() == 1
+
+
+def test_la_cli_reanuda_el_grafo(logger, fake_sleep, capsys):
+    _, base = cliente([use_tool(), use_tool(ticket_id="T-1043")], logger, fake_sleep)
+    falla = ClienteConFalla(base, 3)
+
+    assert run_agent(falla, "grafo", PREGUNTA, verbose=False, ejecucion="g1") == 2
+    assert "--agent grafo --reanudar g1" in capsys.readouterr().err
+
+    provider, client = cliente([answer("El T-1043.")], logger, fake_sleep)
+    assert run_agent(client, "grafo", None, verbose=False, reanudar="g1") == 0
+    salida = capsys.readouterr().out
+    assert "reanudada: 2 pasos guardados" in salida and "El T-1043." in salida
+    assert len(provider.calls) == 1
+
+
+def test_reanudar_el_grafo_desde_la_cli():
+    assert parse_args(["--agent", "grafo", "--reanudar", "g1"]).reanudar == "g1"
+    with pytest.raises(SystemExit):
+        parse_args(["--agent", "grafo", "--mcp", "--ejecucion", "g1", "¿Y el T-1043?"])

@@ -8,7 +8,11 @@ ejecuta la herramienta que decidió. Cada nodo regresa solo lo que cambia del es
                      └→ END (respondió o se acabó el presupuesto)
 
 Con un checkpointer, LangGraph guarda una foto del estado al terminar cada nodo. El
-`thread_id` (aquí, el id de la ejecución) separa una ejecución de otra.
+`thread_id` (aquí, el id de la ejecución) separa una ejecución de otra. Si una ejecución se
+cae, `reanudar()` sigue desde la última foto y el nodo que falló vuelve a correr completo.
+Por eso decidir y actuar son nodos separados: la acción que eligió el LLM queda guardada
+antes de ejecutarse y, si el proceso muere al escribir, se repite la misma acción con el
+mismo request_id.
 """
 
 from __future__ import annotations
@@ -55,6 +59,7 @@ CHECKPOINTS_PATH = Path("var") / "checkpoints.db"
 class Estado(TypedDict):
     pregunta: str
     historial: str
+    request_id: str  # la llave de idempotencia de las escrituras vive en el estado (Clase 5)
     pasos: Annotated[list[dict], operator.add]  # cada nodo agrega pasos; no reemplaza la lista
     pendiente: dict | None  # la acción que decidió el LLM y que `actuar` todavía no ejecuta
     respuesta: str | None
@@ -156,6 +161,7 @@ class AgenteGrafo:
         n = len(estado["pasos"]) + 1
         call = AgentStep.model_validate(pendiente["paso"]).as_tool_call(f"paso-{n}")
         if self.runner and call.name in self.tools_by_name:
+            self.runner.request_id = estado["request_id"]  # el mismo al reanudar
             message = self.runner.execute(call)
         else:
             message = execute_tool(call, self.tools_by_name)
@@ -183,6 +189,7 @@ class AgenteGrafo:
         entrada = {
             "pregunta": pregunta,
             "historial": historial,
+            "request_id": uuid.uuid4().hex,
             "pasos": [],
             "pendiente": None,
             "respuesta": None,
@@ -190,13 +197,24 @@ class AgenteGrafo:
         }
         return self._invocar(entrada)
 
+    def reanudar(self, ejecucion: str) -> AgentResult:
+        """Sigue desde el último checkpoint: invoke(None, config) con el mismo thread_id."""
+        self.ejecucion = ejecucion
+        foto = self.grafo.get_state(self._config())
+        if not foto.values:
+            raise LookupError(f"no hay una ejecución {ejecucion} en el checkpointer.")
+        if not foto.next:
+            raise ValueError(f"la ejecución {ejecucion} ya terminó ({foto.values['motivo']}).")
+        self._emit("reanudada", pasos=len(foto.values["pasos"]))
+        return self._invocar(None)
+
     def _invocar(self, entrada: dict | None) -> AgentResult:
         self._inicio = self.clock()
         with self.client.track() as total:
             try:
                 self.grafo.invoke(entrada, self._config(), durability="sync")
             except (StructuredOutputError, AllProvidersFailedError):
-                pass  # Como en el ReAct: motivo "error", con los pasos que alcanzaron a correr.
+                pass  # El último checkpoint queda guardado: reanudar() sigue desde ahí.
         valores = self.grafo.get_state(self._config()).values
         result = AgentResult(
             respuesta=valores["respuesta"],

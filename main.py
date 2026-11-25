@@ -27,6 +27,8 @@ Uso:
     uv run main.py --agent react --ejecucion r1 --falla-en 3 "Compara el T-1042 y el T-1043"
     uv run main.py --agent react --reanudar r1
     uv run main.py --agent grafo --verbose "Compara el T-1042 y el T-1043"
+    uv run main.py --agent grafo --ejecucion g1 --falla-en 3 "Compara el T-1042 y el T-1043"
+    uv run main.py --agent grafo --reanudar g1
 """
 
 from __future__ import annotations
@@ -223,8 +225,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--reanudar",
         metavar="ID",
-        help="Con --agent react, retoma la ejecución ID desde su último paso guardado, con la "
-        "misma pregunta (reto de la Clase 9).",
+        help="Con --agent react o grafo, retoma la ejecución ID desde su último paso "
+        "guardado, con la misma pregunta.",
     )
     parser.add_argument(
         "--falla-en",
@@ -258,8 +260,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--sesion requiere --agent react o grafo.")
     if args.ejecucion and (args.agent not in ("react", "grafo") or args.mcp):
         parser.error("--ejecucion requiere --agent react o grafo, sin --mcp.")
-    if args.reanudar and (args.agent != "react" or args.mcp):
-        parser.error("--reanudar requiere --agent react y no se combina con --mcp.")
+    if args.reanudar and (args.agent not in ("react", "grafo") or args.mcp):
+        parser.error("--reanudar requiere --agent react o grafo, sin --mcp.")
     if args.ejecucion and args.reanudar:
         parser.error("--ejecucion y --reanudar no se usan juntos.")
     if args.reanudar and (args.prompt or args.sesion):
@@ -397,6 +399,8 @@ def run_agent(
                 print(f"{GRAY}{actions[-1]} · {paso.pensamiento}{RESET}")
         elif event == "observacion" and verbose:
             print(f"{GRAY}    ← {json.dumps(data['observacion'], ensure_ascii=False)}{RESET}")
+        elif event == "reanudada":
+            print(f"{GRAY}reanudada: {data['pasos']} pasos guardados{RESET}")
 
     agent_cls = ReActAgent if kind == "react" else PlanAndExecute
 
@@ -413,9 +417,12 @@ def run_agent(
                 client, tools, on_event=on_event, runner=runner, checkpointer=saver
             )
             try:
-                historial = run_kwargs.get("historial", "")
-                resultado = agente.run(question, historial, ejecucion=ejecucion)
-            except ValueError as e:  # el id ya existe
+                if reanudar:
+                    resultado = agente.reanudar(reanudar)
+                else:
+                    historial = run_kwargs.get("historial", "")
+                    resultado = agente.run(question, historial, ejecucion=ejecucion)
+            except (ValueError, LookupError) as e:
                 fail(str(e))
                 return None
         hilo = agente.ejecucion
