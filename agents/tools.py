@@ -62,7 +62,7 @@ POLITICAS: dict[str, ToolPolicy] = {
 ROLES: dict[Rol, set[Permiso]] = {"lectura": {"lectura"}, "operador": {"lectura", "escritura"}}
 
 # Herramienta sin política explícita: se trata como peligrosa y se niega (default seguro).
-# "peligrosa" no está en ningún rol: la aprobación humana llega en la Clase 11.
+# "peligrosa" no está en ningún rol: la aprobación humana llega en la Clase 12.
 SIN_POLITICA = ToolPolicy("peligrosa")
 BACKOFF_BASE_S = 0.5  # Esperas entre reintentos: 0.5 s, 1 s, ...
 

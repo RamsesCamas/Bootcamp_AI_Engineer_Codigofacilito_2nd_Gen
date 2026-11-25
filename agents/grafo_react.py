@@ -169,6 +169,12 @@ class AgenteGrafo:
         self._emit("observacion", n=n, observacion=observacion)
         return {"pasos": [{**pendiente, "observacion": observacion}], "pendiente": None}
 
+    def _verificar(self, estado: Estado) -> dict:
+        """Práctica guiada de la Clase 11: revisa la respuesta contra la traza (Clase 4)."""
+        # TODO(clase-11): llama a verify_and_revise con la pregunta, la respuesta y la traza, y
+        # regresa la respuesta final y "verificacion": {"aprobada": ..., "problemas": [...]}.
+        raise NotImplementedError("Práctica guiada de la Clase 11")
+
     def _siguiente(self, estado: Estado) -> str:
         """La arista condicional: si hay una acción pendiente, a `actuar`; si no, se termina."""
         return "actuar" if estado["pendiente"] else END
