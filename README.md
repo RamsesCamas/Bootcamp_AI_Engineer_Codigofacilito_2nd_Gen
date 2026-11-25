@@ -13,6 +13,7 @@ El Agente Operador es un asistente para el equipo de operaciones de una empresa 
 - **Clase 7:** RAG agéntico: búsqueda híbrida (BM25 + vectores, fusionados con RRF), reescritura de la pregunta, re-ranking con el LLM y `buscar_documentos` como herramienta del agente.
 - **Clase 8:** GraphRAG con NetworkX: un grafo de tickets, proveedores, equipos, guardias, servicios y chunks, construido con datos, reglas y el LLM; PageRank personalizado para preguntas de varios saltos y `consultar_grafo` como herramienta del agente.
 - **Clase 9:** memoria (`memory/`): la sesión con historial y resumen (corto plazo), recuerdos con embeddings que el LLM consolida (largo plazo), y un router que decide si una pregunta va a la búsqueda, al grafo o a la memoria.
+- **Clase 11:** orquestación con LangGraph (`agents/grafo_react.py`): el agente ReAct como grafo con estado, checkpoints en SQLite y reanudación después de una falla.
 
 ## Qué se construye en cada bloque
 
@@ -21,9 +22,9 @@ El Agente Operador es un asistente para el equipo de operaciones de una empresa 
 | Fundamentos | 1–3 | Cliente LLM multi-proveedor, prompting, manejo de contexto y contratos de salida |
 | Agentes | 4–5 | Ciclo de agente con herramientas para actuar sobre los tickets |
 | Conocimiento | 6–9 | Búsqueda sobre documentación interna (RAG) y memoria |
-| Orquestación | 10–11 | Flujos de varios pasos y coordinación entre agentes |
-| Evaluación | 12–13 | Conjuntos de prueba y métricas de calidad |
-| Producción | 14–17 | Streaming, observabilidad, costos y despliegue |
+| Orquestación | 11–12 | Flujos de varios pasos y coordinación entre agentes |
+| Evaluación | 13–14 | Conjuntos de prueba y métricas de calidad |
+| Producción | 15–18 | Streaming, observabilidad, costos y despliegue |
 
 ## Requisitos e instalación
 
@@ -103,6 +104,11 @@ uv run main.py --agent react --docs --grafo --memoria "¿Qué me falta para cerr
 # Reanudar una ejecución que falló (reto de la Clase 9); --falla-en simula la caída del proveedor
 uv run main.py --agent react --ejecucion r1 --falla-en 3 "Compara el T-1042 y el T-1043"
 uv run main.py --agent react --reanudar r1
+
+# Orquestación con LangGraph (Clase 11): checkpoints en var/checkpoints.db
+uv run main.py --agent grafo --verbose "¿Cómo va el T-1042?"
+uv run main.py --agent grafo --ejecucion g1 --falla-en 3 "Compara el T-1042 y el T-1043"
+uv run main.py --agent grafo --reanudar g1
 ```
 
 Cada llamada imprime la respuesta y una línea gris con `proveedor · modelo · tokens in/out · latencia · costo`, y agrega una línea JSON por intento a `logs/llm_calls.jsonl`. Con `--prompt`, el log incluye `prompt_name` y `prompt_version`.
@@ -158,6 +164,11 @@ uv run scripts/memoria.py consolidar --sesion demo
 
 # Router: la regla y el LLM eligen búsqueda, grafo o memoria (Clase 9); --llm llama al LLM
 uv run scripts/eval_router.py --llm --detalle --report reports/router.md
+
+# Ejecuciones del agente como grafo (Clase 11); no llaman al LLM
+uv run scripts/ejecuciones.py listar
+uv run scripts/ejecuciones.py historial g1
+uv run scripts/ejecuciones.py grafo
 ```
 
 `compare_prompts.py` usa un solo proveedor sin fallback (el primario o el de `--provider`). `main.py --prompt` usa solo el primario si la cadena de fallbacks no se puede armar (por ejemplo, mientras `GroqProvider` esté pendiente).
@@ -373,7 +384,7 @@ Si el motivo no es `respuesta`, la CLI lo explica y termina con código de salid
 
 **Idempotencia.** `actualizar_estado` fija un valor: llamarla dos veces con el mismo estado deja el mismo resultado y la segunda regresa `"cambio": false`. Por eso se puede reintentar sin miedo. Escribe en un overlay, `var/tickets_estado.json`, con escritura atómica; `data/tickets_db.json` nunca cambia y `buscar_ticket` aplica el overlay al leer.
 
-**`ToolPolicy` y roles** (`agents/tools.py`). Cada herramienta tiene un permiso (`lectura`, `escritura` o `peligrosa`), un timeout, si es idempotente y un máximo de llamadas por ejecución. El rol `lectura` solo puede leer; `operador` lee y escribe. Una herramienta sin política se trata como `peligrosa` y se niega, y `peligrosa` no se permite en ningún rol: la aprobación humana llega en la Clase 11. `ToolRunner.execute` revisa en este orden: permiso → llamadas restantes → argumentos → ejecución con timeout → reintento (0.5 s, 1 s) solo si el error es transitorio y la herramienta es idempotente. Cada ejecución se registra en `logs/tool_calls.jsonl` con `tool_name`, `tool_permiso`, `tool_resultado` y `tool_intentos`, nunca con los argumentos. El timeout corre el handler en un hilo: si se vence, dejamos de esperarlo, pero Python no puede matar el hilo.
+**`ToolPolicy` y roles** (`agents/tools.py`). Cada herramienta tiene un permiso (`lectura`, `escritura` o `peligrosa`), un timeout, si es idempotente y un máximo de llamadas por ejecución. El rol `lectura` solo puede leer; `operador` lee y escribe. Una herramienta sin política se trata como `peligrosa` y se niega, y `peligrosa` no se permite en ningún rol: la aprobación humana llega en la Clase 12. `ToolRunner.execute` revisa en este orden: permiso → llamadas restantes → argumentos → ejecución con timeout → reintento (0.5 s, 1 s) solo si el error es transitorio y la herramienta es idempotente. Cada ejecución se registra en `logs/tool_calls.jsonl` con `tool_name`, `tool_permiso`, `tool_resultado` y `tool_intentos`, nunca con los argumentos. El timeout corre el handler en un hilo: si se vence, dejamos de esperarlo, pero Python no puede matar el hilo.
 
 **MCP** (*Model Context Protocol*). Un estándar para que un **host** (la app con el modelo, aquí `main.py`) use herramientas de un **server** a través de un **client** que habla el protocolo. El server declara sus tools (nombre, descripción, `inputSchema`, annotations) y el cliente las lista con `tools/list` y las llama con `tools/call`. Con el transporte **stdio**, el host lanza el server como subproceso y se comunican por stdin/stdout. `operador_mcp/server.py` expone las mismas herramientas con el mismo `ToolRunner` (rol en `OPERADOR_ROL`, por defecto `lectura`), y `operador_mcp/client.py` (`MCPToolset`) las convierte en `ToolSpec` para el agente. Las annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`) salen de la política; son pistas para el cliente, no seguridad.
 
@@ -536,6 +547,34 @@ uv run scripts/eval_router.py --llm --detalle
 
 Costo: con `--sesion`, cada paso del agente lleva el historial y, cuando pasa de 300 tokens, hay una llamada de resumen. `consolidar` hace una llamada para extraer y una por hecho si la memoria ya tiene recuerdos. El router con LLM hace una llamada por pregunta (38 en `eval_router.py --llm`); la regla no llama a nada.
 
+## Clase 11: orquestación con LangGraph
+
+El `ReActAgent` de la Clase 4 guarda su estado en variables locales: si el proceso se cae a la mitad, se pierde lo que ya hizo. En el reto de la Clase 9 lo resolvimos a mano, con un JSON por ejecución. En esta clase el mismo agente se escribe como un grafo de LangGraph: el estado es un diccionario, cada nodo regresa solo lo que cambia y un checkpointer guarda una foto del estado al terminar cada nodo. Con esas fotos, una ejecución que se cae se reanuda desde el último nodo que terminó.
+
+| Pieza | Archivo | Idea clave |
+|---|---|---|
+| Checkpoint a mano | `agents/checkpoint.py` | La solución del reto: `var/ejecuciones/ID.json` con escritura atómica, `ReActAgent.run(traza=...)` y el `request_id` guardado para no duplicar escrituras |
+| Estado | `agents/grafo_react.py` | `Estado` es un `TypedDict`: pregunta, historial, `request_id`, pasos, acción pendiente, respuesta y motivo. `pasos` usa el reducer `operator.add`, así que los nodos agregan pasos en lugar de reemplazar la lista. Todo es JSON |
+| Nodos y aristas | `agents/grafo_react.py` | `decidir` revisa el presupuesto y llama al LLM; `actuar` ejecuta la herramienta. La arista condicional manda a `actuar` si hay una acción pendiente y a `END` si no |
+| Checkpointer | `agents/grafo_react.py` | `SqliteSaver` en `var/checkpoints.db`, con `durability="sync"`: la foto de cada nodo se escribe antes de correr el siguiente. El `thread_id` es el id de la ejecución |
+| Reanudar | `AgenteGrafo.reanudar` | `invoke(None, config)` con el mismo `thread_id`: el nodo que falló corre otra vez completo. La acción pendiente ya está en el estado, así que una escritura repetida lleva los mismos argumentos y el mismo `request_id` |
+| Caída simulada | `core/fallas.py` | `--falla-en N`: desde la llamada N, el cliente falla como si se hubiera acabado la cuota |
+| Inspección | `scripts/ejecuciones.py` | `listar`, `historial ID` y `grafo` (en Mermaid); no llaman al LLM |
+
+Al reanudar, LangGraph vuelve a correr completo el nodo que falló: cada nodo corre al menos una vez, no exactamente una. Por eso las herramientas de escritura tienen que ser idempotentes, como `crear_ticket` desde la Clase 5.
+
+### Comandos
+
+```bash
+uv run main.py --agent grafo --verbose "¿Cómo va el T-1042?"
+uv run main.py --agent grafo --ejecucion g1 --falla-en 3 --verbose "Compara el T-1042 y el T-1043"
+uv run main.py --agent grafo --reanudar g1 --verbose
+uv run scripts/ejecuciones.py historial g1
+uv run scripts/ejecuciones.py grafo
+```
+
+Costo: el grafo hace las mismas llamadas al LLM que el ReAct, una por paso. Reanudar no repite las llamadas ni las herramientas de los pasos guardados. Los checkpoints son escrituras en SQLite y no llaman a ninguna API.
+
 ## Retos
 
 ### Reto de la Clase 1: proveedor de respaldo y reporte
@@ -689,6 +728,24 @@ Opcional: migra el system prompt de `main.py` (busca `TODO(clase-2)`) a `prompts
 3. En `main.py`, agrega `--ejecucion ID` (guarda cada paso) y `--reanudar ID` (retoma la que no terminó, sin volver a escribir la pregunta). Pruébalo con un test: un `FakeProvider` que falla en la tercera llamada y, después, otro que responde.
 4. Escribe en `reports/reanudar.md` cuántas llamadas al LLM y a herramientas se ahorran al reanudar contra empezar de cero, y qué pasa si se cae justo después de ejecutar una herramienta de escritura y antes de guardar el paso. En la Clase 11 comparamos tu versión con el checkpointing de LangGraph.
 
+### Práctica guiada de la Clase 11: un nodo que verifica la respuesta
+
+1. En `tests/test_grafo_react.py`, escribe tres tests con `verificar=True`. Si el verificador aprueba, la respuesta no cambia y el estado guarda en `verificacion` `{"aprobada": true, "problemas": []}`. Si no aprueba, la respuesta es la corregida y `verificacion` trae los problemas. Sin `verificar`, el grafo no tiene el nodo `verificar`. Deben fallar.
+2. En `agents/grafo_react.py` (busca `TODO(clase-11)`), implementa `_verificar` con `verify_and_revise` de la Clase 4. Agrega `verificacion` al `Estado` y a la entrada de `run`.
+3. En el mismo archivo, agrega a `AgenteGrafo` el parámetro `verificar`: con él, `_construir` agrega el nodo `verificar` y su arista a `END`, y `_siguiente` manda a `verificar` cuando ya hay respuesta. En `main.py`, con `--agent grafo --verify`, pásale `verificar=True` en lugar de verificar después de correr. En `scripts/ejecuciones.py`, arma el grafo con `verificar=True` para que el historial muestre ese nodo.
+4. Corre el agente y revisa su historial:
+   ```bash
+   uv run main.py --agent grafo --verify --ejecucion v1 --verbose "¿Cómo va el T-1042?"
+   uv run scripts/ejecuciones.py historial v1
+   ```
+
+### Reto para la Clase 12: aprobación humana a mano
+
+1. En `agents/tools.py`, agrega al `ToolRunner` un parámetro opcional `aprobar(nombre, argumentos) -> bool`. Antes de ejecutar una herramienta con permiso `escritura`, el runner le pregunta; si regresa `False`, no la ejecuta y regresa un `tool_error` de tipo `permiso` que diga que el usuario la rechazó. Las de lectura nunca preguntan.
+2. En `main.py`, agrega `--aprobar`: la CLI muestra la herramienta con sus argumentos y espera `s` o `n` en la terminal.
+3. Escribe tests con un `aprobar` falso: si rechaza, `crear_ticket` no crea nada y el agente recibe el rechazo como observación; si aprueba, lo crea; `buscar_ticket` nunca pregunta.
+4. Escribe en `reports/aprobacion.md` qué pasa si nadie contesta en dos horas y qué haría falta para aprobar al día siguiente desde otra máquina. En la Clase 12 lo comparamos con `interrupt()` de LangGraph, que pausa la ejecución sobre el checkpointer de hoy.
+
 ## Avisos
 
 - Gemini se consume con su [endpoint oficial compatible con OpenAI](https://ai.google.dev/gemini-api/docs/openai), que Google marca como **beta**. Desde junio de 2026 Google recomienda su API nativa, la [Interactions API](https://ai.google.dev/gemini-api/docs/interactions-overview), para proyectos nuevos. Aquí usamos la compatible con OpenAI para que Gemini, Groq y Ollama compartan un mismo adaptador base. Cambiar a la API nativa solo requiere otro adaptador en `core/providers.py`; el resto del código no se toca.
@@ -698,4 +755,5 @@ Opcional: migra el system prompt de `main.py` (busca `TODO(clase-2)`) a `prompts
 - El grafo vive en la memoria de un proceso y en un JSON: sirve para este corpus y para prototipos. Cuando el grafo crece, cambia seguido o lo consultan varios servicios, ese papel lo hace una base de grafos como Neo4j, que guarda el mismo modelo de nodos y relaciones con propiedades y se consulta con Cypher.
 - `BM25Index` vive en memoria y se arma con todos los chunks del índice cada vez que se crea un `Retriever`. Con los 54 chunks del corpus tarda milisegundos; con cientos de miles de chunks, ese papel lo hace un motor de búsqueda (OpenSearch, Elasticsearch o la búsqueda de texto completo de Postgres).
 - Los precios en `core/pricing.py` son **ilustrativos**. Revisa la tabla vigente de cada proveedor antes de tomar decisiones con ellos.
+- `var/checkpoints.db` es SQLite: sirve para un proceso en una máquina. Cuando varias réplicas del agente atienden ejecuciones, el checkpointer va en una base compartida, como `PostgresSaver` sobre Postgres.
 - **Nunca subas tu `.env`** al repositorio. Ya está en `.gitignore`; si alguna vez lo subes por error, rota tus llaves.
