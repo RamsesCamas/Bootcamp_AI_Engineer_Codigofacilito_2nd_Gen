@@ -99,6 +99,10 @@ uv run main.py --agent react --sesion demo "¿Cómo va el T-1043?"
 uv run main.py --agent react --sesion demo "¿Y quién lo atiende?"
 uv run main.py --rag "¿Qué quedé de revisar con PagosRed?" --modo auto
 uv run main.py --agent react --docs --grafo --memoria "¿Qué me falta para cerrar el T-1022?"
+
+# Reanudar una ejecución que falló (reto de la Clase 9); --falla-en simula la caída del proveedor
+uv run main.py --agent react --ejecucion r1 --falla-en 3 "Compara el T-1042 y el T-1043"
+uv run main.py --agent react --reanudar r1
 ```
 
 Cada llamada imprime la respuesta y una línea gris con `proveedor · modelo · tokens in/out · latencia · costo`, y agrega una línea JSON por intento a `logs/llm_calls.jsonl`. Con `--prompt`, el log incluye `prompt_name` y `prompt_version`.

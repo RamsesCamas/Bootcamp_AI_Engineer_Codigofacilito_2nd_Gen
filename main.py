@@ -24,6 +24,8 @@ Uso:
     uv run main.py --agent react --sesion demo "¿Cómo va el T-1042?"
     uv run main.py --rag "¿A quién escalé el T-1043?" --modo auto
     uv run main.py --agent react --memoria "¿Qué quedé de revisar con PagosRed?"
+    uv run main.py --agent react --ejecucion r1 --falla-en 3 "Compara el T-1042 y el T-1043"
+    uv run main.py --agent react --reanudar r1
 """
 
 from __future__ import annotations
@@ -209,9 +211,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Con --agent react, guarda la conversación en var/sesiones/ID.json y la usa como "
         "historial del siguiente turno (Clase 9).",
     )
+    parser.add_argument(
+        "--ejecucion",
+        metavar="ID",
+        help="Con --agent react, guarda el estado después de cada paso en "
+        "var/ejecuciones/ID.json para poder reanudarla (reto de la Clase 9).",
+    )
+    parser.add_argument(
+        "--reanudar",
+        metavar="ID",
+        help="Con --agent react, retoma la ejecución ID desde su último paso guardado, con la "
+        "misma pregunta (reto de la Clase 9).",
+    )
+    parser.add_argument(
+        "--falla-en",
+        type=int,
+        metavar="N",
+        help="Con --agent, simula que el proveedor se cae desde la llamada N (para practicar "
+        "--reanudar).",
+    )
     args = parser.parse_args(argv)
     if args.rag is not None:
-        others = (args.prompt, args.ticket, args.agent, args.prompt_name, args.demo, args.sesion)
+        others = (
+            *(args.prompt, args.ticket, args.agent, args.prompt_name, args.demo, args.sesion),
+            *(args.ejecucion, args.reanudar, args.falla_en),
+        )
         if any(others) or args.structured or args.tools or args.docs or args.grafo or args.memoria:
             parser.error("--rag recibe la pregunta y no se combina con otros modos.")
         if args.modo == "auto" and (args.reescribir or args.rerank):
@@ -229,13 +253,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--verify requiere --agent.")
     if args.sesion and args.agent != "react":
         parser.error("--sesion requiere --agent react.")
+    if args.ejecucion and (args.agent != "react" or args.mcp):
+        parser.error("--ejecucion requiere --agent react y no se combina con --mcp.")
+    if args.reanudar and (args.agent != "react" or args.mcp):
+        parser.error("--reanudar requiere --agent react y no se combina con --mcp.")
+    if args.ejecucion and args.reanudar:
+        parser.error("--ejecucion y --reanudar no se usan juntos.")
+    if args.reanudar and (args.prompt or args.sesion):
+        parser.error("--reanudar retoma la pregunta guardada: no escribas otra ni uses --sesion.")
+    if args.falla_en is not None and not args.agent:
+        parser.error("--falla-en requiere --agent.")
     if args.mcp and not args.agent:
         parser.error("--mcp requiere --agent.")
     if args.agent and (args.structured or args.tools or args.prompt_name or args.demo):
         parser.error("--agent no se combina con --structured, --tools, --prompt ni --demo.")
-    if args.agent and (args.prompt is None or args.ticket):
+    if args.agent and not args.reanudar and (args.prompt is None or args.ticket):
         parser.error('--agent necesita la pregunta como texto, por ejemplo "¿Cómo va el T-1042?".')
-    if args.prompt is None and not (args.demo or args.ticket):
+    if args.prompt is None and not (args.demo or args.ticket or args.reanudar):
         parser.error("falta el texto a enviar (o usa --demo o --ticket).")
     if args.prompt_version is not None and not args.prompt_name:
         parser.error("--prompt-version requiere --prompt.")
@@ -332,6 +366,8 @@ def run_agent(
     grafo: bool = False,
     sesion: str | None = None,
     memoria: bool = False,
+    ejecucion: str | None = None,
+    reanudar: str | None = None,
 ) -> int:
     from agents import PlanAndExecute, ReActAgent, verify_and_revise
     from agents.tools import ToolRunner
@@ -377,6 +413,27 @@ def run_agent(
         nota = f" · {resumidos} turnos pasaron al resumen" if resumidos else ""
         print(f"{GRAY}sesión {sesion}: {len(conversacion.turnos)} turnos{nota}{RESET}")
         run_kwargs["historial"] = conversacion.historial()
+    hilo = ejecucion or reanudar  # el id de la ejecución, para --reanudar
+    guardada = None
+    if hilo:
+        # Reto de la Clase 9: el estado después de cada paso, en var/ejecuciones/ID.json.
+        from agents.checkpoint import Ejecucion
+
+        try:
+            if reanudar:
+                guardada = Ejecucion.cargar(reanudar)
+            else:
+                guardada = Ejecucion.crear(ejecucion, question, run_kwargs.get("historial", ""))
+        except (ValueError, LookupError) as e:
+            return fail(str(e))
+        if not guardada.reanudable:
+            return fail(f"la ejecución {reanudar} ya terminó ({guardada.motivo}).")
+        question = guardada.pregunta
+        run_kwargs.update(
+            historial=guardada.historial, traza=guardada.traza(), al_paso=guardada.registrar
+        )
+        if reanudar:
+            print(f"{GRAY}reanudada: {len(guardada.pasos)} pasos guardados{RESET}")
     if mcp:
         # El server MCP aplica su propio ToolRunner con OPERADOR_ROL.
         from operador_mcp.client import MCPToolset
@@ -422,13 +479,17 @@ def run_agent(
                 )
             recuerdos = Memoria(make_embedder(embedder or "gemini"))
             tools += [consultar_memoria_tool(recuerdos), guardar_recuerdo_tool(recuerdos)]
-        runner = ToolRunner(tools, rol=rol, log_path=TOOL_LOG_PATH)
+        # Al reanudar, el mismo request_id: una escritura repetida no se duplica (Clase 5).
+        request_id = guardada.request_id if guardada else None
+        runner = ToolRunner(tools, rol=rol, log_path=TOOL_LOG_PATH, request_id=request_id)
         extras = (" + documentos" if docs else "") + (" + grafo" if grafo else "")
         extras += " + memoria" if memoria else ""
         print(f"{GRAY}herramientas: locales{extras} · rol {rol}{RESET}")
         result = agent_cls(client, tools, on_event=on_event, runner=runner).run(
             question, **run_kwargs
         )
+    if guardada:
+        guardada.terminar(result)
     respuesta, checked = result.respuesta, None
     llamadas, tokens, cost_usd = result.llamadas, result.tokens, result.cost_usd
     if verify and respuesta:
@@ -460,6 +521,9 @@ def run_agent(
     )
     if result.motivo != "respuesta":
         print(f"Aviso: {STOP_MESSAGES[result.motivo]}", file=sys.stderr)
+        if hilo and result.motivo == "error":
+            pista = f"uv run main.py --agent {kind} --reanudar {hilo}"
+            print(f"Reanuda con: {pista}", file=sys.stderr)
         return 2
     return 0
 
@@ -647,6 +711,10 @@ def main(argv: list[str] | None = None) -> int:
         return fail(config_error(e))
     except NotImplementedError as e:
         return fail(str(e))
+    if args.falla_en:
+        from core.fallas import ClienteConFalla
+
+        client = ClienteConFalla(client, args.falla_en)
 
     if args.agent:
         return run_agent(
@@ -662,6 +730,8 @@ def main(argv: list[str] | None = None) -> int:
             grafo=args.grafo,
             sesion=args.sesion,
             memoria=args.memoria,
+            ejecucion=args.ejecucion,
+            reanudar=args.reanudar,
         )
 
     if args.structured or args.tools:

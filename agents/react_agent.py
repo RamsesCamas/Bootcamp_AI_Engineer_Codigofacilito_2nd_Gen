@@ -136,14 +136,25 @@ class ReActAgent:
             historial=historial,
         )
 
-    def run(self, pregunta: str, historial: str = "") -> AgentResult:
-        """Recorre el ciclo ReAct. `historial` es la conversación previa (Clase 9)."""
+    def run(
+        self,
+        pregunta: str,
+        historial: str = "",
+        *,
+        traza: list[TraceStep] | None = None,
+        al_paso: Callable[[TraceStep], None] | None = None,
+    ) -> AgentResult:
+        """Recorre el ciclo ReAct. `historial` es la conversación previa (Clase 9).
+
+        Reto de la Clase 9: con `traza`, sigue después de esos pasos sin volver a ejecutar sus
+        herramientas. `al_paso` recibe cada paso nuevo en cuanto termina, para guardarlo.
+        """
         run_id = self._shared_run_id or uuid.uuid4().hex[:8]
         start = self.clock()
-        traza: list[TraceStep] = []
+        traza = list(traza or [])
 
         with self.client.track() as total:
-            for n in range(1, self.budget.max_pasos + 2):
+            for n in range(len(traza) + 1, self.budget.max_pasos + 2):
                 motivo = self.budget.exhausted(traza, self.clock() - start)
                 if motivo:
                     return self._finish(None, traza, motivo, total, run_id)
@@ -186,6 +197,8 @@ class ReActAgent:
                         latency_ms=step_usage.latency_ms,
                     )
                 )
+                if al_paso:
+                    al_paso(traza[-1])
                 self._emit("observacion", n=n, observacion=observacion)
 
             return self._finish(None, traza, "max_pasos", total, run_id)  # pragma: no cover
